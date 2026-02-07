@@ -18,6 +18,7 @@ data/temp/
 node_modules/
 dist/
 build/
+config.js
 
 # IDEs / Editors
 .vscode/

@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NutriSense - AI Kitchen Assistant</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" sizes="any">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo-section">
+                    <div class="logo-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z"/>
+                            <line x1="6" y1="17" x2="18" y2="17"/>
+                        </svg>
+                    </div>
+                    <div class="logo-text">
+                        <h1>NutriSense</h1>
+                        <p>Your AI-Powered Kitchen Assistant</p>
+                    </div>
+                </div>
+                <div class="settings-wrapper">
+                <button class="settings-btn" id="settingsBtn" aria-haspopup="true" aria-expanded="false">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M12 1v6m0 6v6m-6-6h6m6 0h-6"/>
+                    </svg>
+                </button>
+                <div class="settings-dropdown hidden" id="settingsMenu" role="menu">
+                    <button class="dropdown-item" id="logoutItem" role="menuitem">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                            <polyline points="16 17 21 12 16 7"/>
+                            <line x1="21" y1="12" x2="9" y2="12"/>
+                        </svg>
+                        Logout
+                    </button>
+                </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="nav-tabs">
+        <div class="container">
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="scan">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                        <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                    <span>Scan Fridge</span>
+                </button>
+                <button class="tab-btn" data-tab="profile">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    <span>Profile</span>
+                </button>
+                <button class="tab-btn" data-tab="shopping">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="9" cy="21" r="1"/>
+                        <circle cx="20" cy="21" r="1"/>
+                        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+                    </svg>
+                    <span>Shopping List</span>
+                </button>
+                <button class="tab-btn" data-tab="recipes">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z"/>
+                        <line x1="6" y1="17" x2="18" y2="17"/>
+                    </svg>
+                    <span>Recipes</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            
+            <!-- Scan Tab -->
+            <div class="tab-content active" id="scan-tab">
+                <div class="card">
+                    <h2 class="card-title">Scan Your Fridge</h2>
+                    
+                    <div class="upload-area" id="uploadArea">
+                        <input type="file" id="imageUpload" accept="image/*" hidden>
+                        <div class="upload-icon" id="uploadIcon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                        </div>
+                        <div class="spinner hidden" id="spinner"></div>
+                        <p class="upload-text" id="uploadText">Upload a photo of your fridge</p>
+                        <p class="upload-subtext">or click to browse files</p>
+                    </div>
+
+                    <div class="preview-image hidden" id="previewImage"></div>
+                </div>
+
+                <div class="card hidden" id="ingredientsCard">
+                    <div class="card-header">
+                        <h3 class="card-subtitle">
+                            <span class="badge" id="ingredientCount">0 items</span>
+                            Detected Ingredients
+                        </h3>
+                        <button class="btn-secondary" id="confirmAllBtn">Confirm All</button>
+                    </div>
+                    <p class="card-description">Review and confirm the detected ingredients. Click edit to make changes.</p>
+                    <div class="ingredients-grid" id="ingredientsList"></div>
+                </div>
+            </div>
+
+            <!-- Profile Tab -->
+            <div class="tab-content" id="profile-tab">
+                <div class="card">
+                    <h2 class="card-title">Personal Information</h2>
+                    
+                    <form class="profile-form" id="profileForm">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="age">Age</label>
+                                <input type="number" id="age" placeholder="Enter your age" min="1" max="120">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="gender">Gender</label>
+                                <select id="gender">
+                                    <option value="">Select gender</option>
+                                    <option value="male">Male</option>
+                                    <option value="female">Female</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="weight">Weight (kg)</label>
+                                <input type="number" id="weight" placeholder="Enter your weight" min="1" step="0.1">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="height">Height (cm)</label>
+                                <input type="number" id="height" placeholder="Enter your height" min="1">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="goal">Health Goal</label>
+                                <select id="goal">
+                                    <option value="maintain">Maintain Weight</option>
+                                    <option value="lose">Lose Weight</option>
+                                    <option value="gain">Gain Muscle</option>
+                                    <option value="energy">Increase Energy</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="dietType">Diet Type</label>
+                                <select id="dietType">
+                                    <option value="balanced">Balanced</option>
+                                    <option value="vegetarian">Vegetarian</option>
+                                    <option value="vegan">Vegan</option>
+                                    <option value="keto">Keto</option>
+                                    <option value="paleo">Paleo</option>
+                                    <option value="mediterranean">Mediterranean</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <hr style="margin: 24px 0; border: none; border-top: 1px solid #e5e7eb;">
+
+                        <h3 class="card-subtitle">Taste Preferences</h3>
+                        <p class="card-description">Add keywords to personalize your recipe recommendations (e.g., "spicy", "Italian", "comfort food")</p>
+
+                        <div class="preference-input">
+                            <input type="text" id="preferenceInput" placeholder="Add a preference...">
+                            <button class="btn-add" id="addPreferenceBtn">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="12" y1="5" x2="12" y2="19"/>
+                                    <line x1="5" y1="12" x2="19" y2="12"/>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div class="preferences-tags" id="preferencesTags"></div>
+
+                        <button type="submit" class="btn-primary" style="margin-top: 24px;">Save Profile</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Shopping List Tab -->
+            <div class="tab-content" id="shopping-tab">
+                <div class="card">
+                    <h2 class="card-title">Recommended Ingredients</h2>
+                    <p class="card-description">Based on your nutritional needs and current ingredients</p>
+                    
+                    <div class="recommendations-list" id="recommendationsList">
+                        <div class="empty-state">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <circle cx="9" cy="21" r="1"/>
+                                <circle cx="20" cy="21" r="1"/>
+                                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+                            </svg>
+                            <p>Scan your fridge and complete your profile to get personalized recommendations</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-subtitle">Nearby Stores</h3>
+                        <button class="btn-secondary" id="refreshStoresBtn">Refresh</button>
+                    </div>
+                    <div class="stores-list" id="storesList">
+                        <div class="empty-state-small">
+                            <p>Store information will appear here</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recipes Tab -->
+            <div class="tab-content" id="recipes-tab">
+                <div class="card">
+                    <h2 class="card-title">Recommended Recipes</h2>
+                    <p class="card-description">Recipes tailored to your ingredients and preferences</p>
+                    
+                    <div class="recipes-grid" id="recipesList">
+                        <div class="empty-state">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z"/>
+                                <line x1="6" y1="17" x2="18" y2="17"/>
+                            </svg>
+                            <p>Scan your fridge to discover delicious recipes you can make</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Toast Notification -->
+    <div class="toast hidden" id="toast">
+        <span id="toastMessage"></span>
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal-overlay hidden" id="editModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Edit Ingredient</h3>
+                <button class="modal-close" id="closeModalBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="editName">Ingredient Name</label>
+                    <input type="text" id="editName" placeholder="e.g., Tomatoes">
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="editQuantity">Quantity</label>
+                        <input type="number" id="editQuantity" placeholder="e.g., 3" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label for="editUnit">Unit</label>
+                        <select id="editUnit">
+                            <option value="pieces">pieces</option>
+                            <option value="g">grams (g)</option>
+                            <option value="kg">kilograms (kg)</option>
+                            <option value="ml">milliliters (ml)</option>
+                            <option value="L">liters (L)</option>
+                            <option value="cups">cups</option>
+                            <option value="tbsp">tablespoons</option>
+                            <option value="tsp">teaspoons</option>
+                            <option value="oz">ounces (oz)</option>
+                            <option value="lb">pounds (lb)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="editFreshness">Freshness</label>
+                    <select id="editFreshness">
+                        <option value="good">Fresh / Good</option>
+                        <option value="warning">Use Soon</option>
+                        <option value="expired">Expired</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="cancelEditBtn">Cancel</button>
+                <button class="btn-primary" id="saveEditBtn">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auth gate: redirect to login if no Supabase session -->
+    <script type="module">
+        import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+        import { SUPABASE_URL, SUPABASE_ANON_KEY, BACKEND_URL } from './config.js';
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            window.location.href = 'auth.html';
+        } else {
+            // Expose client for other scripts if needed
+            window.supabaseClient = supabase;
+            window.BACKEND_URL = BACKEND_URL;
+        }
+    </script>
+    <script src="script.js"></script>
+</body>
+</html>

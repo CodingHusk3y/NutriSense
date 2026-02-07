@@ -278,23 +278,61 @@ async function generateRecommendations() {
 }
 
 async function fetchStores(shoppingList) {
-    try {
-        const res = await fetch(`${getBackendUrl()}/stores/recommend`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                lat: 40.7128, 
-                lng: -74.0060, 
-                items: shoppingList
-            })
-        });
+    console.log("1. Requesting GPS location...");
+    elements.storesList.innerHTML = '<div class="spinner"></div><p style="text-align:center">Locating you...</p>';
 
-        const data = await res.json();
-        renderStores(data.stores);
-    } catch (e) {
-        console.error("Store fetch error", e);
-        elements.storesList.innerHTML = '<p>Could not load stores.</p>';
+    // 1. Check if Browser supports Geolocation
+    if (!navigator.geolocation) {
+        alert("Geolocation is not supported by your browser");
+        return;
     }
+
+    // 2. Get Current Position
+    navigator.geolocation.getCurrentPosition(
+        async (position) => {
+            const userLat = position.coords.latitude;
+            const userLng = position.coords.longitude;
+            
+            console.log(`📍 User Location: ${userLat}, ${userLng}`);
+            
+            // 3. Now send the REAL location to the backend
+            try {
+                const itemsToSearch = (shoppingList && shoppingList.length > 0) 
+                    ? shoppingList 
+                    : ['Milk', 'Eggs', 'Bread']; 
+
+                const res = await fetch(`${getBackendUrl()}/stores/recommend`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lat: userLat,   // <--- DYNAMIC VALUE
+                        lng: userLng,   // <--- DYNAMIC VALUE
+                        items: itemsToSearch
+                    })
+                });
+
+                if (!res.ok) throw new Error(`Server returned ${res.status}`);
+                const data = await res.json();
+                
+                if (data.stores && data.stores.length > 0) {
+                    renderStores(data.stores);
+                } else {
+                    elements.storesList.innerHTML = '<p>No stores found nearby.</p>';
+                }
+
+            } catch (e) {
+                console.error("Fetch Error:", e);
+                elements.storesList.innerHTML = `<p style="color:red">Error: ${e.message}</p>`;
+            }
+        },
+        (error) => {
+            // Error handling for GPS
+            console.error("GPS Error:", error);
+            elements.storesList.innerHTML = '<p style="color:red">⚠️ Location access denied. Using default.</p>';
+            // Optional: Fallback to Atlanta if they deny permission
+            // fetchStoresWithFallback(33.7756, -84.3963, shoppingList);
+        }
+    );
 }
 
 // --- Recipe Generation (Real Backend Call) ---

@@ -20,7 +20,7 @@ from .config import (
 # Import routers and logic
 from .recipes import router as recipes_router
 from .nutrition_logic import detect_gaps, calculate_targets
-from .store_logic import recommend_stores
+from .store_logic import find_stores_for_items
 
 # --- Request Models ---
 class AnalysisRequest(BaseModel):
@@ -216,9 +216,8 @@ def analyze_fridge_nutrition(payload: AnalysisRequest, Authorization: Optional[s
     }
 
 @app.post("/stores/recommend")
-def get_store_recommendations(payload: StoreRequest):
+async def get_store_recommendations(payload: StoreRequest):
     """
     Returns top 3 stores based on price and distance for the given list.
     """
-    results = recommend_stores(payload.lat, payload.lng, payload.items)
-    return {"stores": results}
+    return await find_stores_for_items(payload.lat, payload.lng, payload.items)

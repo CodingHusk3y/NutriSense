@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NutriSense - Login</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" sizes="any">
+  <style>
+    .auth-card { max-width: 420px; margin: 80px auto; }
+    .auth-toggle { text-align: center; margin-top: 12px; }
+    .auth-toggle button { background: none; border: none; color: #2563eb; cursor: pointer; }
+    .auth-header { display:flex; align-items:center; gap:10px; }
+    .auth-header h1 { margin: 0; }
+    .logo-icon svg { color: #2563eb; }
+  </style>
+</head>
+<body>
+  <main class="main-content">
+    <div class="container">
+      <div class="card auth-card">
+        <div class="auth-header">
+          <div class="logo-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z"/>
+              <line x1="6" y1="17" x2="18" y2="17"/>
+            </svg>
+          </div>
+          <h1>NutriSense</h1>
+        </div>
+        <p class="card-description">Sign in or create an account to continue</p>
+
+        <form id="loginForm" class="profile-form">
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" placeholder="you@example.com" required />
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="Enter password" required />
+          </div>
+          <button type="submit" class="btn-primary" id="loginBtn">Sign In</button>
+        </form>
+
+        <form id="registerForm" class="profile-form hidden">
+          <div class="form-group">
+            <label for="rEmail">Email</label>
+            <input type="email" id="rEmail" placeholder="you@example.com" required />
+          </div>
+          <div class="form-group">
+            <label for="rPassword">Password</label>
+            <input type="password" id="rPassword" placeholder="Choose a password" required />
+            <small class="form-error hidden" id="passwordError"></small>
+          </div>
+          <div class="form-group">
+            <label for="rConfirmPassword">Confirm Password</label>
+            <input type="password" id="rConfirmPassword" placeholder="Re-enter password" required />
+            <small class="form-error hidden" id="confirmError"></small>
+          </div>
+          <button type="submit" class="btn-primary" id="registerBtn">Create Account</button>
+          
+        </form>
+
+        <div class="auth-toggle">
+          <span id="toggleText">Don't have an account?</span>
+          <button id="toggleBtn">Sign up</button>
+        </div>
+        <div class="toast hidden" id="toast">
+          <span id="toastMessage"></span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="auth.js"></script>
+</body>
+</html>

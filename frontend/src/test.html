@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Store Display Debugger</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .store-box { 
+            border: 2px solid #333; 
+            padding: 15px; 
+            margin: 10px 0; 
+            background: #f0fdf4; /* Light green background to ensure visibility */
+            color: #000; /* Force black text */
+        }
+        .error-box {
+            border: 2px solid red;
+            background: #fee2e2;
+            padding: 15px;
+            color: red;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🛒 Frontend Debugger</h1>
+    <p>Click the button to fetch stores from 127.0.0.1:8000</p>
+    
+    <button id="testBtn" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">
+        Test Connection & Render
+    </button>
+
+    <div id="debugOutput" style="margin-top: 20px;">
+        </div>
+
+    <script>
+        document.getElementById('testBtn').addEventListener('click', async () => {
+            const output = document.getElementById('debugOutput');
+            output.innerHTML = 'Loading...';
+
+            try {
+                // 1. Force a known request
+                const response = await fetch('http://127.0.0.1:8000/stores/recommend', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lat: 33.7756, 
+                        lng: -84.3963, 
+                        items: ['Milk', 'Eggs']
+                    })
+                });
+
+                // 2. Check HTTP status
+                if (!response.ok) {
+                    throw new Error(`HTTP Error: ${response.status}`);
+                }
+
+                // 3. Log raw JSON
+                const data = await response.json();
+                console.log("RAW DATA:", data);
+
+                // 4. Validate Data Structure
+                if (!data.stores || !Array.isArray(data.stores)) {
+                    throw new Error("Invalid JSON: 'stores' array is missing.");
+                }
+
+                if (data.stores.length === 0) {
+                    output.innerHTML = '<div class="store-box">Backend returned 0 stores (Empty List).</div>';
+                    return;
+                }
+
+                // 5. MANUAL RENDER LOOP
+                // We build the HTML string manually to catch any variable errors
+                let html = `<h3>Found ${data.stores.length} Stores:</h3>`;
+                
+                data.stores.forEach((store, index) => {
+                    // Check for missing keys
+                    const name = store.name || "NO NAME";
+                    const price = store.total_price || 0;
+                    const dist = store.distance_km || 0;
+                    
+                    html += `
+                        <div class="store-box">
+                            <strong>#${index + 1}: ${name}</strong><br>
+                            Distance: ${dist} km<br>
+                            Price: $${price}
+                        </div>
+                    `;
+                });
+
+                output.innerHTML = html;
+
+            } catch (err) {
+                console.error(err);
+                output.innerHTML = `<div class="error-box"><strong>JavaScript Error:</strong> ${err.message}</div>`;
+            }
+        });
+    </script>
+</body>
+</html>

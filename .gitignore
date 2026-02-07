@@ -1,0 +1,38 @@
+# Python / Backend
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+.env.*
+
+# ML / Data
+models/
+*.pt
+*.h5
+*.onnx
+data/raw/
+data/temp/
+
+# Frontend / Node
+node_modules/
+dist/
+build/
+
+# IDEs / Editors
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python venv
+.venv/
+
+# Java / Maven
+target/
+*.class
+
+# IntelliJ
+*.iml

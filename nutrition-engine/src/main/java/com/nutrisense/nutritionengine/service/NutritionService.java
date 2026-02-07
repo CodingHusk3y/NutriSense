@@ -30,7 +30,7 @@ public class NutritionService {
         double fats = (tdee * 0.25) / 9.0;
         double carbs = (tdee - (protein * 4.0 + fats * 9.0)) / 4.0;
 
-        // 👇 BMI calculation
+        // BMI calculation
         double heightMeters = user.getHeightCm() / 100.0;
         double bmi = user.getWeightKg() / (heightMeters * heightMeters);
 

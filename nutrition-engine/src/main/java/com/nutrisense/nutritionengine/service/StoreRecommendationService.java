@@ -16,21 +16,32 @@ public class StoreRecommendationService {
 
     // if a store doesn't have a price for an item, we penalize it with fallback price
     private static final double MISSING_ITEM_PENALTY_PRICE = 6.00;
+    private final GoogleDistanceMatrixService googleDistance;
+
+    public StoreRecommendationService(GoogleDistanceMatrixService googleDistance) {
+        this.googleDistance = googleDistance;
+    }
+
 
     public StoreRecommendationResponse recommend(double userLat, double userLng, List<String> neededItems) {
-        List<String> items = (neededItems == null) ? Collections.emptyList() : neededItems;
+        System.out.println("ENTER recommend()");
 
+        List<String> items = (neededItems == null) ? Collections.emptyList() : neededItems;
         List<Store> stores = getMockStores();
 
-        // collect raw totals
         List<Double> totals = new ArrayList<>();
         List<Double> dists = new ArrayList<>();
         Map<String, Double> storeTotalPrice = new HashMap<>();
         Map<String, Double> storeDistance = new HashMap<>();
 
+        // 1) compute totals + distances ONCE (Google first, fallback)
         for (Store s : stores) {
             double total = computeTotalPrice(s, items);
-            double dist = distanceKm(userLat, userLng, s.getLatitude(), s.getLongitude());
+
+            double dist = googleDistance.drivingDistanceKm(userLat, userLng, s.getLatitude(), s.getLongitude());
+            if (dist < 0) {
+                dist = distanceKm(userLat, userLng, s.getLatitude(), s.getLongitude());
+            }
 
             storeTotalPrice.put(s.getId(), total);
             storeDistance.put(s.getId(), dist);
@@ -44,6 +55,7 @@ public class StoreRecommendationService {
         double minDist = dists.isEmpty() ? 0 : Collections.min(dists);
         double maxDist = dists.isEmpty() ? 0 : Collections.max(dists);
 
+        // 2) score using the SAME distances used for min/max
         List<StoreScore> scored = new ArrayList<>();
         for (Store s : stores) {
             double total = storeTotalPrice.get(s.getId());
@@ -51,7 +63,6 @@ public class StoreRecommendationService {
 
             double normPrice = normalize(total, minPrice, maxPrice);
             double normDist = normalize(dist, minDist, maxDist);
-
             double score = WEIGHT_PRICE * normPrice + WEIGHT_DISTANCE * normDist;
 
             scored.add(new StoreScore(
@@ -65,7 +76,6 @@ public class StoreRecommendationService {
             ));
         }
 
-        // sort by score asc (lower better)
         scored.sort(Comparator.comparingDouble(StoreScore::getScore));
 
         StoreScore bestOverall = scored.isEmpty() ? null : scored.get(0);
@@ -78,6 +88,7 @@ public class StoreRecommendationService {
 
         return new StoreRecommendationResponse(bestOverall, cheapest, closest, scored);
     }
+
 
     private double computeTotalPrice(Store store, List<String> items) {
         if (items == null || items.isEmpty()) return 0;

@@ -10,4 +10,5 @@ public class UserProfile {
     private String gender;      // "male" / "female"
     private String healthGoal;  // "LOSE_WEIGHT" / "GAIN_MUSCLE" / "MAINTAIN"
     private String dietType;    // "VEGAN" / "KETO" / "BALANCED" ...
+    private String activityLevel;   // "Sedentary" / "Light" / "Moderate" / "Heavy" / "Athlete"
 }

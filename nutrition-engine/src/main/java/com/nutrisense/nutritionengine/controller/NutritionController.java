@@ -1,9 +1,6 @@
 package com.nutrisense.nutritionengine.controller;
 
-import com.nutrisense.nutritionengine.model.NutritionRequest;
-import com.nutrisense.nutritionengine.model.NutritionResponse;
-import com.nutrisense.nutritionengine.model.NutritionTarget;
-import com.nutrisense.nutritionengine.model.ShoppingItem;
+import com.nutrisense.nutritionengine.model.*;
 import com.nutrisense.nutritionengine.service.NutritionService;
 import com.nutrisense.nutritionengine.service.RecommendationService;
 import org.springframework.web.bind.annotation.*;
@@ -12,6 +9,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/nutrition")
+@CrossOrigin(origins = "*")
 public class NutritionController {
 
     private final NutritionService nutritionService;
@@ -23,27 +21,23 @@ public class NutritionController {
         this.recommendationService = recommendationService;
     }
 
-    // Quick health check endpoint (for browser testing)
     @GetMapping("/ping")
     public String ping() {
         return "ok";
     }
 
-    // Main endpoint: compute targets + recommendations
     @PostMapping("/analyze")
     public NutritionResponse analyze(@RequestBody NutritionRequest request) {
-        NutritionTarget target = nutritionService.calculateTarget(request.getUserProfile());
+        UserProfile user = request.getUserProfile();
+        List<Ingredient> ingredients = request.getIngredients();
 
-        List<String> recs = recommendationService.generateRecommendations(
-                request.getUserProfile(),
-                request.getIngredients()
-        );
+        NutritionTarget target = nutritionService.calculateTarget(user);
+        FoodGroupTargets groupTargets = nutritionService.calculateFoodGroupTargets(user);
 
-        List<ShoppingItem> shopping = recommendationService.generateShoppingList(
-                request.getUserProfile(),
-                request.getIngredients()
-        );
+        List<FoodGap> gaps = recommendationService.detectGaps(user, ingredients);
+        List<String> recs = recommendationService.generateRecommendations(user, ingredients, gaps);
+        List<ShoppingItem> shopping = recommendationService.generateShoppingList(user, gaps);
 
-        return new NutritionResponse(target, recs, shopping);
+        return new NutritionResponse(target, groupTargets, gaps, recs, shopping);
     }
 }

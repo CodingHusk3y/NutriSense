@@ -10,4 +10,5 @@ public class NutritionTarget {
     private double protein;
     private double carbs;
     private double fats;
+    private double bmi;
 }

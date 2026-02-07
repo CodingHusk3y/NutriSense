@@ -13,6 +13,12 @@ public class FoodGroupService {
     // You can expand over time / load from JSON later.
     private static final Map<String, Set<FoodGroup>> GROUP_MAP = new HashMap<>();
 
+    private final FoodCatalogService foodCatalogService;
+
+    public FoodGroupService(FoodCatalogService foodCatalogService) {
+        this.foodCatalogService = foodCatalogService;
+    }
+
     static {
         put("egg", FoodGroup.PROTEIN, FoodGroup.FATS);
         put("chicken breast", FoodGroup.PROTEIN);

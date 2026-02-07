@@ -11,10 +11,19 @@ public class RecommendationService {
     private final NutritionService nutritionService;
     private final FoodGroupService foodGroupService;
 
-    public RecommendationService(NutritionService nutritionService, FoodGroupService foodGroupService) {
+    private final FoodCatalogService foodCatalogService;
+
+    public RecommendationService(NutritionService nutritionService,
+                                 FoodGroupService foodGroupService,
+                                 FoodCatalogService foodCatalogService) {
         this.nutritionService = nutritionService;
         this.foodGroupService = foodGroupService;
+        this.foodCatalogService = foodCatalogService;
     }
+    /*public RecommendationService(NutritionService nutritionService, FoodGroupService foodGroupService) {
+        this.nutritionService = nutritionService;
+        this.foodGroupService = foodGroupService;
+    }*/
 
     public List<FoodGap> detectGaps(UserProfile user, List<Ingredient> ingredients) {
         NutritionTarget target = nutritionService.calculateTarget(user);
@@ -143,25 +152,29 @@ public class RecommendationService {
     private double estimateProteinFromFridge(List<Ingredient> ingredients) {
         if (ingredients == null) return 0;
 
-        // quick hackathon: use a small lookup map (per "serving")
-        Map<String, Double> proteinPerItem = Map.of(
-                "egg", 6.0,
-                "chicken breast", 31.0,
-                "tofu", 10.0,
-                "greek yogurt", 17.0,
-                "milk", 8.0,
-                "beans", 15.0,
-                "lentils", 18.0
-        );
-
         double total = 0;
         for (Ingredient ing : ingredients) {
             if (ing == null || ing.getName() == null) continue;
             if ("EXPIRED".equals(ing.getFreshnessStatus())) continue;
 
-            Double p = proteinPerItem.get(ing.getName().toLowerCase());
+            // 1) Try DB
+            var row = foodCatalogService.find(ing.getName());
+            if (row != null && row.getProtein() != null) {
+                total += row.getProtein();
+                continue;
+            }
+
+            // 2) Fallback
+            Double p = Map.of(
+                    "egg", 6.0,
+                    "chicken breast", 31.0,
+                    "tofu", 10.0,
+                    "greek yogurt", 17.0
+            ).get(ing.getName().toLowerCase());
+
             if (p != null) total += p;
         }
         return total;
     }
+
 }

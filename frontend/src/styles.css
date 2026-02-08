@@ -154,6 +154,24 @@ body {
     display: flex;
     gap: 0.25rem;
     overflow-x: auto;
+    
+.walk-tracker {
+    margin-top: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--border-radius);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+}
+.walk-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 0.25rem 0;
+    font-size: 0.9rem;
+}
+.walk-row .label {
+    color: var(--text-medium);
+}
     scrollbar-width: none;
 }
 

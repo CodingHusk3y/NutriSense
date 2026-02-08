@@ -20,7 +20,7 @@ from .config import (
 # Import routers and logic
 from .recipes import router as recipes_router
 from .nutrition_logic import detect_gaps, calculate_targets
-from .store_logic import find_stores_for_items
+from .store_logic import find_stores_for_items, estimate_walking_steps, estimate_walking_calories
 
 # --- Request Models ---
 class AnalysisRequest(BaseModel):
@@ -31,6 +31,14 @@ class StoreRequest(BaseModel):
     lat: float
     lng: float
     items: List[str]
+
+class WalkLog(BaseModel):
+    start_ts: float
+    end_ts: float
+    calories: float
+    store_name: str
+    distance_km: float
+    steps: int
 
 # --- App Setup ---
 app = FastAPI(title="NutriSense Backend", version="0.1.0")
@@ -221,3 +229,85 @@ async def get_store_recommendations(payload: StoreRequest):
     Returns top 3 stores based on price and distance for the given list.
     """
     return await find_stores_for_items(payload.lat, payload.lng, payload.items)
+
+# Optionally enrich with walking steps/calories for weight loss goal
+    # Fetch user profile if available to get weight and goal
+    try:
+        supabase = get_supabase_client()
+        profiles = supabase.table("profiles").select("weight_kg,gender,health_goal").limit(1).execute()
+        prof = profiles.data[0] if getattr(profiles, "data", []) else {}
+    except Exception:
+        prof = {}
+
+    weight = prof.get("weight_kg") or 70.0
+    gender = prof.get("gender")
+    goal = (prof.get("health_goal") or "").lower()
+
+    enriched = []
+    for s in results:
+        entry = dict(s)
+        # Always attach estimates; UI can decide when to show
+        entry["walking_steps"] = estimate_walking_steps(s.get("distance_km", 0), gender)
+        entry["walking_calories"] = estimate_walking_calories(s.get("distance_km", 0), weight)
+        entry["goal"] = goal
+        enriched.append(entry)
+
+    return {"stores": enriched}
+
+# --- Activity: Walking Calories Logging ---
+@app.post("/activity/walk")
+def log_walking_session(payload: WalkLog, Authorization: Optional[str] = Header(default=None)):
+    supabase = get_supabase_client()
+    if supabase is None:
+        raise HTTPException(status_code=500, detail="Supabase not configured")
+    token = get_bearer_token(Authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+
+    try:
+        user_res = supabase.auth.get_user(token)
+        user_id = user_res.user.id
+        data = {
+            "user_id": user_id,
+            "start_ts": payload.start_ts,
+            "end_ts": payload.end_ts,
+            "calories": payload.calories,
+            "store_name": payload.store_name,
+            "distance_km": payload.distance_km,
+            "steps": payload.steps
+        }
+        res = supabase.table("walking_sessions").insert(data).execute()
+        return {"success": True, "data": getattr(res, "data", [])}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Walking log failed: {e}")
+
+@app.get("/activity/walk/trend")
+def get_walking_trend(days: int = 14, Authorization: Optional[str] = Header(default=None)):
+    supabase = get_supabase_client()
+    if supabase is None:
+        raise HTTPException(status_code=500, detail="Supabase not configured")
+    token = get_bearer_token(Authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+
+    try:
+        user_res = supabase.auth.get_user(token)
+        user_id = user_res.user.id
+        import time, datetime
+        cutoff = time.time() - (days * 24 * 3600)
+        res = supabase.table("walking_sessions").select("start_ts,calories").eq("user_id", user_id).gte("start_ts", cutoff).order("start_ts").execute()
+        rows = getattr(res, "data", []) or []
+        # Aggregate calories per day
+        daily = {}
+        for r in rows:
+            dt = datetime.datetime.utcfromtimestamp(float(r.get("start_ts", 0))).date().isoformat()
+            daily[dt] = daily.get(dt, 0) + float(r.get("calories", 0))
+        # Fill missing days with 0 up to 'days'
+        series = []
+        today = datetime.date.today()
+        for i in range(days - 1, -1, -1):
+            d = (today - datetime.timedelta(days=i)).isoformat()
+            series.append({"date": d, "calories": int(round(daily.get(d, 0)))})
+        return {"series": series}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Trend fetch failed: {e}")

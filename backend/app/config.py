@@ -19,7 +19,8 @@ SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", os.getenv("SU
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 FRIDGE_BUCKET = os.getenv("FRIDGE_BUCKET", "fridge")
 NUTRITION_ENGINE_URL = os.getenv("NUTRITION_ENGINE_URL", "http://127.0.0.1:8000")
-
+PRESAGE_API_KEY = os.getenv("PRESAGE_API_KEY")
+PRESAGE_API_URL = os.getenv("PRESAGE_API_URL", "https://api.physiology.presagetech.com")
 
 # Configure Gemini globally
 if GEMINI_API_KEY:
@@ -40,3 +41,12 @@ def get_bearer_token(auth_header: Optional[str]) -> Optional[str]:
     if len(parts) == 2 and parts[0].lower() == "bearer":
         return parts[1]
     return None
+
+def get_presage_headers() -> dict:
+    """Returns authorization headers for Presage API if configured."""
+    if not PRESAGE_API_KEY:
+        return {}
+    return {
+        "Authorization": f"Bearer {PRESAGE_API_KEY}",
+        "Content-Type": "application/json"
+    }

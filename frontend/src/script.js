@@ -13,7 +13,8 @@ const state = {
     recommendations: [],
     stores: [],
     recipes: [],
-    editingIndex: null
+    editingIndex: null,
+    walkingSessions: {}
 };
 
 // DOM Elements
@@ -173,6 +174,8 @@ function handleTabSwitch(tab) {
         generateRecommendations(); // Calls /nutrition/analyze-fridge
     } else if (tabId === 'recipes') {
         generateRecipes(); // Calls /recipes/recommend
+    } else if (tabId === 'profile') {
+        loadWalkingTrend();
     }
 }
 
@@ -278,61 +281,24 @@ async function generateRecommendations() {
 }
 
 async function fetchStores(shoppingList) {
-    console.log("1. Requesting GPS location...");
-    elements.storesList.innerHTML = '<div class="spinner"></div><p style="text-align:center">Locating you...</p>';
+    try {
+        const res = await fetch(`${getBackendUrl()}/stores/recommend`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                lat: 40.7128, 
+                lng: -74.0060, 
+                items: shoppingList
+            })
+        });
 
-    // 1. Check if Browser supports Geolocation
-    if (!navigator.geolocation) {
-        alert("Geolocation is not supported by your browser");
-        return;
+        const data = await res.json();
+        state.stores = data.stores || [];
+        renderStores(state.stores);
+    } catch (e) {
+        console.error("Store fetch error", e);
+        elements.storesList.innerHTML = '<p>Could not load stores.</p>';
     }
-
-    // 2. Get Current Position
-    navigator.geolocation.getCurrentPosition(
-        async (position) => {
-            const userLat = position.coords.latitude;
-            const userLng = position.coords.longitude;
-            
-            console.log(`📍 User Location: ${userLat}, ${userLng}`);
-            
-            // 3. Now send the REAL location to the backend
-            try {
-                const itemsToSearch = (shoppingList && shoppingList.length > 0) 
-                    ? shoppingList 
-                    : ['Milk', 'Eggs', 'Bread']; 
-
-                const res = await fetch(`${getBackendUrl()}/stores/recommend`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        lat: userLat,   // <--- DYNAMIC VALUE
-                        lng: userLng,   // <--- DYNAMIC VALUE
-                        items: itemsToSearch
-                    })
-                });
-
-                if (!res.ok) throw new Error(`Server returned ${res.status}`);
-                const data = await res.json();
-                
-                if (data.stores && data.stores.length > 0) {
-                    renderStores(data.stores);
-                } else {
-                    elements.storesList.innerHTML = '<p>No stores found nearby.</p>';
-                }
-
-            } catch (e) {
-                console.error("Fetch Error:", e);
-                elements.storesList.innerHTML = `<p style="color:red">Error: ${e.message}</p>`;
-            }
-        },
-        (error) => {
-            // Error handling for GPS
-            console.error("GPS Error:", error);
-            elements.storesList.innerHTML = '<p style="color:red">⚠️ Location access denied. Using default.</p>';
-            // Optional: Fallback to Atlanta if they deny permission
-            // fetchStoresWithFallback(33.7756, -84.3963, shoppingList);
-        }
-    );
 }
 
 // --- Recipe Generation (Real Backend Call) ---
@@ -415,13 +381,33 @@ function renderStores(stores) {
         return;
     }
 
-    elements.storesList.innerHTML = stores.map(store => `
+    elements.storesList.innerHTML = stores.map((store, idx) => `
         <div class="store-item">
             <div class="store-header">
                 <h4 class="store-name">${store.name}</h4>
                 <span class="store-distance">${store.distance_km} km</span>
             </div>
             <p style="font-size: 0.9rem;">Est. Price: <strong style="color:var(--primary-color)">$${store.total_price}</strong></p>
+            <p style="font-size: 0.85rem; color: var(--text-medium);">
+                Trip steps (round trip): ${estimateSteps(store.distance_km * 2, state.profile.gender).toLocaleString()}
+            </p>
+            <div class="store-actions" style="margin-top:0.5rem;">
+                <button id="walkBtn-${idx}" class="btn-primary walk-btn" onclick="startWalking(${idx})">Start Walking</button>
+            </div>
+            <div id="walkTracker-${idx}" class="walk-tracker hidden">
+                <div class="walk-row">
+                    <span class="label">Elapsed:</span>
+                    <span id="walkElapsed-${idx}">00:00</span>
+                </div>
+                <div class="walk-row">
+                    <span class="label">Calories burned:</span>
+                    <span id="walkCalories-${idx}">0</span>
+                </div>
+                <div class="walk-row">
+                    <span class="label">Target steps:</span>
+                    <span id="walkTarget-${idx}">${estimateSteps(store.distance_km * 2, state.profile.gender).toLocaleString()}</span>
+                </div>
+            </div>
         </div>
     `).join('');
 }
@@ -596,9 +582,14 @@ function addPreference() {
 }
 
 function renderPreferences() {
-    elements.preferencesTags.innerHTML = state.preferences.map(p => 
-        `<span class="preference-tag">${p}</span>`
-    ).join('');
+    elements.preferencesTags.innerHTML = state.preferences
+        .map((p, index) => `
+        <span class="preference-tag">
+            <span class="tag-text">${p}</span>
+            <button class="tag-remove" aria-label="Remove ${p}" onclick="removePreference(${index})">&times;</button>
+        </span>
+    `)
+        .join('');
 }
 
 function showToast(message) {
@@ -613,3 +604,205 @@ function showToast(message) {
 
 // Start
 document.addEventListener('DOMContentLoaded', init);
+// --- Walking Tracker ---
+function estimateSteps(distance_km, gender) {
+    let stride_m = 0.75;
+    if (gender === 'male') stride_m = 0.78;
+    else if (gender === 'female') stride_m = 0.70;
+    const steps = (Number(distance_km || 0) * 1000) / stride_m;
+    return Math.max(0, Math.round(steps));
+}
+
+function formatElapsed(ms) {
+    const totalSec = Math.floor(ms / 1000);
+    const m = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const s = String(totalSec % 60).padStart(2, '0');
+    return `${m}:${s}`;
+}
+
+window.startWalking = (index) => {
+    // prevent duplicate sessions
+    const sess = state.walkingSessions[index];
+    if (sess && sess.running) return;
+
+    const weight = Number(state.profile.weight) || 70.0;
+    const met = 3.5; // normal walking MET
+    const start = Date.now();
+
+    const caloriesPerSecond = (met * weight) / 3600.0; // MET * kg * hours; per second
+    const trackerEl = document.getElementById(`walkTracker-${index}`);
+    const caloriesEl = document.getElementById(`walkCalories-${index}`);
+    const elapsedEl = document.getElementById(`walkElapsed-${index}`);
+    const btnEl = document.getElementById(`walkBtn-${index}`);
+
+    if (trackerEl) trackerEl.classList.remove('hidden');
+    if (btnEl) {
+        btnEl.textContent = 'Stop Walking';
+        btnEl.onclick = () => stopWalking(index);
+    }
+
+    const intervalId = setInterval(() => {
+        const now = Date.now();
+        const elapsedMs = now - start;
+        const elapsedSec = Math.floor(elapsedMs / 1000);
+        const calories = (caloriesPerSecond * elapsedSec);
+        if (elapsedEl) elapsedEl.textContent = formatElapsed(elapsedMs);
+        if (caloriesEl) caloriesEl.textContent = Math.max(0, Math.round(calories));
+    }, 1000);
+
+    state.walkingSessions[index] = {
+        running: true,
+        startTs: start,
+        intervalId,
+        met,
+        weight
+    };
+};
+
+window.stopWalking = (index) => {
+    const sess = state.walkingSessions[index];
+    const btnEl = document.getElementById(`walkBtn-${index}`);
+    if (!sess) return;
+    try {
+        clearInterval(sess.intervalId);
+    } catch {}
+    const elapsedMs = Date.now() - sess.startTs;
+    const elapsedSec = Math.floor(elapsedMs / 1000);
+    const totalCalories = Math.max(0, Math.round((sess.met * sess.weight * (elapsedSec / 3600))));
+    state.walkingSessions[index].running = false;
+
+    // Reset button
+    if (btnEl) {
+        btnEl.textContent = 'Start Walking';
+        btnEl.onclick = () => startWalking(index);
+    }
+
+    showToast(`congrats you burn ${totalCalories} calories through the trip to this store`);
+
+    // Persist to backend
+    const store = (state.stores && state.stores[index]) ? state.stores[index] : { name: 'Store', distance_km: 0 };
+    const gender = state.profile.gender;
+    const tripDistance = Number(store.distance_km || 0) * 2; // round trip
+    const steps = estimateSteps(tripDistance, gender);
+    saveWalkLog({
+        start_ts: sess.startTs / 1000,
+        end_ts: Date.now() / 1000,
+        calories: totalCalories,
+        store_name: store.name,
+        distance_km: tripDistance,
+        steps
+    }).catch(err => console.error('walk log failed', err));
+};
+
+async function saveWalkLog(payload) {
+    try {
+        const token = await getAuthToken();
+        if (!token) throw new Error('Not authenticated');
+        const res = await fetch(`${getBackendUrl()}/activity/walk`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('Save failed');
+    } catch (e) {
+        console.error(e);
+        showToast('Could not save walking data');
+    }
+}
+
+async function loadWalkingTrend() {
+    try {
+        const token = await getAuthToken();
+        if (!token) return;
+        const res = await fetch(`${getBackendUrl()}/activity/walk/trend?days=14`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error('Trend failed');
+        const data = await res.json();
+        renderWalkingTrend(data.series || []);
+    } catch (e) {
+        console.error(e);
+        renderWalkingTrend([]);
+    }
+}
+
+function renderWalkingTrend(series) {
+    const chartEl = document.getElementById('walkingTrendChart');
+    const emptyEl = document.getElementById('walkingTrendEmpty');
+    if (!chartEl) return;
+
+    if (!series || series.length === 0 || series.every(p => (p.calories || 0) === 0)) {
+        chartEl.innerHTML = '';
+        if (emptyEl) emptyEl.classList.remove('hidden');
+        return;
+    }
+    if (emptyEl) emptyEl.classList.add('hidden');
+
+    const width = chartEl.clientWidth || 600;
+    const height = chartEl.clientHeight || 260;
+    const padL = 48, padR = 16, padT = 16, padB = 36;
+    const maxValRaw = Math.max(...series.map(p => p.calories));
+    // Pick a nice max and tick step
+    let step = 10;
+    if (maxValRaw > 200) step = 100; else if (maxValRaw > 50) step = 50; else step = 10;
+    const yMax = Math.max(step, Math.ceil(maxValRaw / step) * step);
+    const yTicks = 5;
+
+    const xSpan = width - padL - padR;
+    const ySpan = height - padT - padB;
+
+    const points = series.map((p, i) => {
+        const x = padL + (i * (xSpan / (series.length - 1)));
+        const y = padT + ((1 - (p.calories / yMax)) * ySpan);
+        return `${x},${y}`;
+    }).join(' ');
+
+    // Build axes, grid and labels
+    const axisColor = '#e5e7eb';
+    const textColor = '#6b7280';
+    const tickEls = [];
+    for (let i = 0; i <= yTicks; i++) {
+        const val = Math.round((yMax / yTicks) * i);
+        const y = padT + (ySpan - (ySpan * i / yTicks));
+        tickEls.push(`
+            <line x1="${padL}" y1="${y}" x2="${width - padR}" y2="${y}" stroke="${axisColor}" stroke-width="1" opacity="0.6" />
+            <text x="${padL - 8}" y="${y + 4}" text-anchor="end" font-size="11" fill="${textColor}">${val}</text>
+        `);
+    }
+
+    // X-axis labels (show ~7 evenly spaced dates)
+    const xLabelEvery = Math.max(1, Math.ceil(series.length / 7));
+    const xLabels = series.map((p, i) => {
+        if (i % xLabelEvery !== 0 && i !== series.length - 1) return '';
+        const x = padL + (i * (xSpan / (series.length - 1)));
+        const label = (p.date || '').slice(5); // show MM-DD
+        return `<text x="${x}" y="${height - padB + 18}" text-anchor="middle" font-size="11" fill="${textColor}">${label}</text>`;
+    }).join('');
+
+    const svg = `
+        <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+            <!-- Axes -->
+            <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${height - padB}" stroke="${axisColor}" stroke-width="1.5" />
+            <line x1="${padL}" y1="${height - padB}" x2="${width - padR}" y2="${height - padB}" stroke="${axisColor}" stroke-width="1.5" />
+            ${tickEls.join('')}
+            ${xLabels}
+            <!-- Data -->
+            <polyline points="${points}" fill="none" stroke="var(--primary-color)" stroke-width="2" />
+        </svg>
+    `;
+    chartEl.innerHTML = svg;
+}
+
+// Preference removal handler
+window.removePreference = (index) => {
+    if (index < 0 || index >= state.preferences.length) return;
+    const removed = state.preferences.splice(index, 1)[0];
+    saveToStorage();
+    renderPreferences();
+    if (removed) {
+        showToast(`Preference '${removed}' removed`);
+    }
+};

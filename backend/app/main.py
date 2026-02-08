@@ -230,30 +230,6 @@ async def get_store_recommendations(payload: StoreRequest):
     """
     return await find_stores_for_items(payload.lat, payload.lng, payload.items)
 
-# Optionally enrich with walking steps/calories for weight loss goal
-    # Fetch user profile if available to get weight and goal
-    try:
-        supabase = get_supabase_client()
-        profiles = supabase.table("profiles").select("weight_kg,gender,health_goal").limit(1).execute()
-        prof = profiles.data[0] if getattr(profiles, "data", []) else {}
-    except Exception:
-        prof = {}
-
-    weight = prof.get("weight_kg") or 70.0
-    gender = prof.get("gender")
-    goal = (prof.get("health_goal") or "").lower()
-
-    enriched = []
-    for s in results:
-        entry = dict(s)
-        # Always attach estimates; UI can decide when to show
-        entry["walking_steps"] = estimate_walking_steps(s.get("distance_km", 0), gender)
-        entry["walking_calories"] = estimate_walking_calories(s.get("distance_km", 0), weight)
-        entry["goal"] = goal
-        enriched.append(entry)
-
-    return {"stores": enriched}
-
 # --- Activity: Walking Calories Logging ---
 @app.post("/activity/walk")
 def log_walking_session(payload: WalkLog, Authorization: Optional[str] = Header(default=None)):

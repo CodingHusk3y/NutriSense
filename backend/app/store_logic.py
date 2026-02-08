@@ -281,3 +281,30 @@ async def find_stores_for_items(user_lat: float, user_lng: float, items: List[st
             "distance_km": closest.distance_km
         } if closest else None
     }
+
+# --- Walking Steps & Calories Estimation ---
+def estimate_walking_steps(distance_km: float, gender: str = None) -> int:
+    """
+    Rough steps estimate based on average stride length.
+    Defaults to ~0.75m per step (~1333 steps per km).
+    """
+    stride_m = 0.75
+    if gender == "male":
+        stride_m = 0.78
+    elif gender == "female":
+        stride_m = 0.70
+    steps = (distance_km * 1000.0) / stride_m
+    return max(0, int(round(steps)))
+
+def estimate_walking_calories(distance_km: float, weight_kg: float = 70.0, speed_kmh: float = 4.8, met: float = 3.5) -> int:
+    """
+    Estimate calories using MET formula:
+    calories = MET * weight_kg * hours, hours = distance_km / speed_kmh
+    For 70kg at 1km, ~50-55 kcal.
+    """
+    try:
+        hours = distance_km / speed_kmh if speed_kmh > 0 else 0
+        calories = met * float(weight_kg or 70.0) * hours
+        return max(0, int(round(calories)))
+    except Exception:
+        return 0

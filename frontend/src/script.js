@@ -385,12 +385,9 @@ function renderStores(stores) {
         <div class="store-item">
             <div class="store-header">
                 <h4 class="store-name">${store.name}</h4>
-                <span class="store-distance">${store.distance_km} km</span>
+                <span class="store-distance">${(Number(store.distance_km || 0) / 1000).toFixed(2)} km</span>
             </div>
             <p style="font-size: 0.9rem;">Est. Price: <strong style="color:var(--primary-color)">$${store.total_price}</strong></p>
-            <p style="font-size: 0.85rem; color: var(--text-medium);">
-                Trip steps (round trip): ${estimateSteps(store.distance_km * 2, state.profile.gender).toLocaleString()}
-            </p>
             <div class="store-actions" style="margin-top:0.5rem;">
                 <button id="walkBtn-${idx}" class="btn-primary walk-btn" onclick="startWalking(${idx})">Start Walking</button>
             </div>
@@ -402,10 +399,6 @@ function renderStores(stores) {
                 <div class="walk-row">
                     <span class="label">Calories burned:</span>
                     <span id="walkCalories-${idx}">0</span>
-                </div>
-                <div class="walk-row">
-                    <span class="label">Target steps:</span>
-                    <span id="walkTarget-${idx}">${estimateSteps(store.distance_km * 2, state.profile.gender).toLocaleString()}</span>
                 </div>
             </div>
         </div>

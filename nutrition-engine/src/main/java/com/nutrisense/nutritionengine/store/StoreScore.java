@@ -8,6 +8,8 @@ import lombok.Data;
 public class StoreScore {
     private String storeId;
     private String storeName;
+    private String storeChain;
+    private String storeAddress;
 
     private double totalPrice;
     private double distanceKm;

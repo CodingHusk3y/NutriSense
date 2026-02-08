@@ -20,10 +20,11 @@ public class NutritionService {
         double activityFactor = mapActivityFactor(user.getActivityLevel());
         double tdee = bmr * activityFactor;
 
-        String goal = user.getHealthGoal() == null ? "MAINTAIN" : user.getHealthGoal();
+        String goal = normalizeGoal(user.getHealthGoal());
         switch (goal) {
             case "LOSE_WEIGHT": tdee -= 500; break;
             case "GAIN_MUSCLE": tdee += 300; break;
+            case "INCREASE_ENERGY": tdee += 150; break; // optional
         }
 
         double protein = user.getWeightKg() * ("GAIN_MUSCLE".equals(goal) ? 2.0 : 1.2);
@@ -33,6 +34,15 @@ public class NutritionService {
         // BMI calculation
         double heightMeters = user.getHeightCm() / 100.0;
         double bmi = user.getWeightKg() / (heightMeters * heightMeters);
+
+        System.out.println("DEBUG age=" + user.getAge()
+                + " gender=" + user.getGender()
+                + " w=" + user.getWeightKg()
+                + " h=" + user.getHeightCm()
+                + " goal=" + user.getHealthGoal()
+                + " activity=" + user.getActivityLevel());
+
+        System.out.println("DEBUG bmr=" + bmr + " activityFactor=" + activityFactor + " tdee=" + tdee);
 
         return new NutritionTarget(
                 round1(tdee),
@@ -68,18 +78,33 @@ public class NutritionService {
     }
 
     private double mapActivityFactor(String level) {
-        if (level == null) return 1.4; // safe default
-        switch (level.toUpperCase()) {
+        if (level == null) return 1.375;
+        String lv = level.trim().toUpperCase(); // <- trim quan trọng
+        switch (lv) {
             case "SEDENTARY": return 1.2;
             case "LIGHT": return 1.375;
             case "MODERATE": return 1.55;
             case "ACTIVE": return 1.725;
             case "VERY_ACTIVE": return 1.9;
-            default: return 1.4;
+            default: return 1.375;
         }
     }
 
     private double round1(double x) {
         return Math.round(x * 10.0) / 10.0;
     }
+
+    private String normalizeGoal(String raw) {
+        if (raw == null) return "MAINTAIN";
+        String g = raw.trim().toUpperCase();
+
+        // support supabase enums (gain/energy/lose/maintain) + current java strings
+        if (g.equals("GAIN")) return "GAIN_MUSCLE";
+        if (g.equals("ENERGY") || g.equals("INCREASE_ENERGY")) return "INCREASE_ENERGY";
+        if (g.equals("LOSE")) return "LOSE_WEIGHT";
+        if (g.equals("MAINTAIN")) return "MAINTAIN";
+
+        return g; // already LOSE_WEIGHT / GAIN_MUSCLE / ...
+    }
+
 }

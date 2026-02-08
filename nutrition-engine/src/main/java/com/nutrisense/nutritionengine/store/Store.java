@@ -12,6 +12,8 @@ import java.util.Map;
 public class Store {
     private String id;
     private String name;
+    private String chain;
+    private String address;
     private double latitude;
     private double longitude;
 

@@ -1,7 +1,10 @@
 package com.nutrisense.nutritionengine.service;
 
 import com.nutrisense.nutritionengine.model.*;
+import com.nutrisense.nutritionengine.supabase.FoodItemRow;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.*;
 
@@ -10,31 +13,32 @@ public class RecommendationService {
 
     private final NutritionService nutritionService;
     private final FoodGroupService foodGroupService;
-
     private final FoodCatalogService foodCatalogService;
+    private final FoodSuggestionService foodSuggestionService;
 
     public RecommendationService(NutritionService nutritionService,
                                  FoodGroupService foodGroupService,
-                                 FoodCatalogService foodCatalogService) {
+                                 FoodCatalogService foodCatalogService,
+                                 FoodSuggestionService foodSuggestionService) {
         this.nutritionService = nutritionService;
         this.foodGroupService = foodGroupService;
         this.foodCatalogService = foodCatalogService;
+        this.foodSuggestionService = foodSuggestionService;
     }
-    /*public RecommendationService(NutritionService nutritionService, FoodGroupService foodGroupService) {
-        this.nutritionService = nutritionService;
-        this.foodGroupService = foodGroupService;
-    }*/
 
     public List<FoodGap> detectGaps(UserProfile user, List<Ingredient> ingredients) {
+        // DB-only + unknown ingredient should fail fast
+        validateIngredientsOrThrow(ingredients);
+
         NutritionTarget target = nutritionService.calculateTarget(user);
         Map<FoodGroup, Integer> counts = foodGroupService.countGroups(ingredients);
 
-        // quick & stable hackathon estimates
+        // DB-based estimates
         double estimatedProtein = estimateProteinFromFridge(ingredients);
 
         List<FoodGap> gaps = new ArrayList<>();
 
-        // thresholds (stable for demo)
+        // thresholds
         if (estimatedProtein < target.getProtein() * 0.6) gaps.add(FoodGap.LOW_PROTEIN);
 
         if (counts.get(FoodGroup.VEGGIES) == 0) gaps.add(FoodGap.NO_VEGGIES);
@@ -55,19 +59,19 @@ public class RecommendationService {
 
     public List<String> generateRecommendations(UserProfile user, List<Ingredient> ingredients, List<FoodGap> gaps) {
         List<String> recs = new ArrayList<>();
+        if (gaps == null) gaps = Collections.emptyList();
 
         // freshness warnings
         long expired = ingredients == null ? 0 : ingredients.stream()
-                .filter(i -> i != null && "EXPIRED".equals(i.getFreshnessStatus()))
+                .filter(i -> i != null && "EXPIRED".equalsIgnoreCase(i.getFreshnessStatus()))
                 .count();
         long useSoon = ingredients == null ? 0 : ingredients.stream()
-                .filter(i -> i != null && "USE_SOON".equals(i.getFreshnessStatus()))
+                .filter(i -> i != null && "USE_SOON".equalsIgnoreCase(i.getFreshnessStatus()))
                 .count();
 
         if (expired > 0) recs.add("Some ingredients may be expired — please check and discard them for safety.");
         if (useSoon > 0) recs.add("You have ingredients to use soon — prioritize meals that use them to reduce waste.");
 
-        // category-level recommendations (matches your logic)
         for (FoodGap g : gaps) {
             switch (g) {
                 case LOW_PROTEIN:
@@ -80,71 +84,51 @@ public class RecommendationService {
                     recs.add("No fruits detected — add 1–2 servings for vitamins and fiber.");
                     break;
                 case LOW_FIBER:
-                    recs.add("Fiber looks low — add beans, oats, berries, or leafy greens.");
+                    recs.add("Fiber looks low — add higher-fiber foods (e.g., oats, lentils, veggies, fruits).");
                     break;
                 case LOW_HEALTHY_FATS:
-                    recs.add("Healthy fats are missing — add avocado, olive oil, nuts, or salmon (diet permitting).");
+                    recs.add("Healthy fats are missing — consider foods like avocado, olive oil, nuts, or salmon (diet permitting).");
                     break;
                 case LOW_COMPLEX_CARBS:
-                    recs.add("Complex carbs are missing — add oats, brown rice, or whole grains (diet permitting).");
+                    recs.add("Complex carbs are missing — add whole grains or starchy carbs (diet permitting).");
                     break;
             }
         }
-
         return recs;
     }
 
     public List<ShoppingItem> generateShoppingList(UserProfile user, List<FoodGap> gaps) {
+        if (gaps == null || gaps.isEmpty()) return Collections.emptyList();
+
+        String diet = user.getDietType() == null ? "" : user.getDietType().trim().toUpperCase();
+
         List<ShoppingItem> list = new ArrayList<>();
 
-        String diet = user.getDietType() == null ? "BALANCED" : user.getDietType().toUpperCase();
-        boolean vegan = "VEGAN".equals(diet) || "VEGETARIAN".equals(diet);
-        boolean keto = "KETO".equals(diet);
-
         for (FoodGap g : gaps) {
-            switch (g) {
-                case LOW_PROTEIN:
-                    if (vegan) {
-                        list.add(new ShoppingItem("Tofu", "Plant-based high protein"));
-                        list.add(new ShoppingItem("Chickpeas", "Plant protein + fiber"));
-                    } else {
-                        list.add(new ShoppingItem("Chicken breast", "Low current protein intake"));
-                        list.add(new ShoppingItem("Greek yogurt", "Good high-protein snack"));
-                    }
-                    break;
+            // fetch suggestions from DB
+            var rows = foodSuggestionService.findSuggestions(g, diet);
 
-                case NO_VEGGIES:
-                    list.add(new ShoppingItem("Broccoli", "Add vegetables for fiber and micronutrients"));
-                    list.add(new ShoppingItem("Spinach", "Easy to add to meals, high micronutrients"));
-                    break;
+            // pick top 2 per gap (tune as you want)
+            int added = 0;
+            for (var r : rows) {
+                String foodName = r.getFoodName();
+                if (foodName == null || foodName.isBlank()) continue;
 
-                case NO_FRUITS:
-                    list.add(new ShoppingItem("Apples", "Convenient fruit serving"));
-                    list.add(new ShoppingItem("Berries", "High fiber fruit option"));
-                    break;
+                // ensure exists in foods (should always be true due to FK+join)
+                if (foodCatalogService.find(foodName) == null) continue;
 
-                case LOW_FIBER:
-                    list.add(new ShoppingItem("Oats", "Easy fiber + complex carbs"));
-                    list.add(new ShoppingItem("Beans/Lentils", "High fiber + protein"));
-                    break;
-
-                case LOW_HEALTHY_FATS:
-                    list.add(new ShoppingItem("Avocado", "Healthy fats"));
-                    list.add(new ShoppingItem("Olive oil", "Healthy fats for cooking"));
-                    break;
-
-                case LOW_COMPLEX_CARBS:
-                    if (!keto) {
-                        list.add(new ShoppingItem("Brown rice", "Complex carbs for energy"));
-                        list.add(new ShoppingItem("Whole-grain bread", "Complex carbs"));
-                    }
-                    break;
+                list.add(new ShoppingItem(foodName, r.getReason()));
+                added++;
+                if (added >= 2) break;
             }
         }
 
         // de-dup by item name
         Map<String, ShoppingItem> uniq = new LinkedHashMap<>();
-        for (ShoppingItem s : list) uniq.putIfAbsent(s.getItem().toLowerCase(), s);
+        for (ShoppingItem s : list) {
+            if (s == null || s.getItem() == null) continue;
+            uniq.putIfAbsent(s.getItem().trim().toLowerCase(), s);
+        }
 
         return new ArrayList<>(uniq.values());
     }
@@ -152,29 +136,77 @@ public class RecommendationService {
     private double estimateProteinFromFridge(List<Ingredient> ingredients) {
         if (ingredients == null) return 0;
 
-        double total = 0;
+        double totalProtein = 0;
+
         for (Ingredient ing : ingredients) {
             if (ing == null || ing.getName() == null) continue;
-            if ("EXPIRED".equals(ing.getFreshnessStatus())) continue;
+            if ("EXPIRED".equalsIgnoreCase(ing.getFreshnessStatus())) continue;
 
-            // 1) Try DB
-            var row = foodCatalogService.find(ing.getName());
-            if (row != null && row.getProtein() != null) {
-                total += row.getProtein();
+            FoodItemRow row = foodCatalogService.find(ing.getName());
+            if (row == null) {
+                // validateIngredientsOrThrow should prevent this
                 continue;
             }
 
-            // 2) Fallback
-            Double p = Map.of(
-                    "egg", 6.0,
-                    "chicken breast", 31.0,
-                    "tofu", 10.0,
-                    "greek yogurt", 17.0
-            ).get(ing.getName().toLowerCase());
+            Double proteinPer100g = row.getProteinPer100g();
+            if (proteinPer100g == null) proteinPer100g = 0.0;
 
-            if (p != null) total += p;
+            double grams = estimateGrams(ing); // you already have this helper
+            totalProtein += proteinPer100g * (grams / 100.0);
         }
-        return total;
+
+        return totalProtein;
     }
 
+    private double estimateGrams(Ingredient ing) {
+        if (ing.getUnit() == null || ing.getQuantity() <= 0) return 100.0;
+
+        String unit = ing.getUnit().trim().toLowerCase();
+        double qty = ing.getQuantity();
+
+        switch (unit) {
+            case "g":
+            case "gram":
+            case "grams":
+                return qty;
+
+            case "kg":
+            case "kilogram":
+            case "kilograms":
+                return qty * 1000.0;
+
+            case "ml":
+                return qty;
+
+            case "l":
+                return qty * 1000.0;
+
+            case "piece":
+            case "pieces":
+                return qty * 50.0;
+
+            default:
+                return 100.0;
+        }
+    }
+
+    private void validateIngredientsOrThrow(List<Ingredient> ingredients) {
+        if (ingredients == null) return;
+
+        for (Ingredient ing : ingredients) {
+            if (ing == null || ing.getName() == null) continue;
+
+            String name = ing.getName().trim();
+            if (name.isBlank()) continue;
+
+            // DB-only unknown -> 400
+            FoodItemRow row = foodCatalogService.find(name);
+            if (row == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "UNKNOWN_INGREDIENT: '" + name + "' not found in foods table"
+                );
+            }
+        }
+    }
 }

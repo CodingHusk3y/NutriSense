@@ -1,109 +1,152 @@
-# NutriSense – Nutrition Engine (Java Spring Boot)
+# NutriSense – Nutrition & Store Recommendation Engine
+**_Java 21 + Spring Boot_**
 
-This module is the **nutrition & ingredient recommendation engine** for the NutriSense hackathon project.  
-It receives a user profile + detected fridge ingredients and returns **daily nutrition targets, food-group needs, gap detection, recommendations, and a smart shopping list**.
-
-Built with **Java 21 + Spring Boot** and documented via **Swagger / OpenAPI**.
+This service powers the nutrition intelligence and smart grocery planning for the **NutriSense project**.  
+It analyzes a user’s health profile and fridge contents, then recommends what to eat and where to buy missing items using real nutrition data and store pricing.
 
 ---
 
 ## What This Service Does
 
-### Inputs
-- **UserProfile**
-    - age, gender, heightCm, weightKg
-    - fitness goal (LOSE_WEIGHT / GAIN_MUSCLE / MAINTAIN)
-    - diet type (BALANCED / VEGAN / VEGETARIAN / KETO / …)
-    - **activityLevel** (SEDENTARY / LIGHT / MODERATE / ACTIVE / VERY_ACTIVE)
-- **Ingredients**
-    - name, quantity, unit
-    - confidenceScore (from vision model)
-    - optional freshness fields (purchaseDate, shelfLifeDays → FRESH/USE_SOON/EXPIRED)
+### Nutrition Intelligence
+Given a user profile and detected ingredients, the engine calculates:
 
-### Outputs
-- **NutritionTarget**
-    - calories + macros (protein/carbs/fats)
-    - **BMI** (informational)
-- **FoodGroupTargets**
-    - proteinGrams, carbsGrams, fatsGrams
-    - veggieServings, fruitServings
-    - fiberGrams
-- **Gaps** (category-level)
-    - e.g., LOW_PROTEIN, NO_VEGGIES, NO_FRUITS, LOW_FIBER, LOW_HEALTHY_FATS, LOW_COMPLEX_CARBS
-- **Recommendations**
-    - human-readable suggestions based on detected gaps + freshness warnings
-- **ShoppingList**
-    - item + reason
-    - filtered by diet type (e.g., VEGAN → tofu/legumes instead of chicken)
+- Daily calorie and macronutrient targets
+- Food group needs (vegetables, fruits, fiber, etc.)
+- Diet gaps based on what is missing
+- Personalized nutrition recommendations
+- A smart shopping list tailored to the user's diet
+
+All nutrition data comes from a **Supabase database** (`foods` table). No hardcoded ingredient logic is used.
+
+---
+
+### Smart Store Recommendation
+
+Once the shopping list is generated, the system:
+
+- Looks up real food prices from store databases
+- Uses **Google Maps Distance Matrix API** to compute driving distance
+- Ranks stores based on:
+  - Total grocery cost
+  - Travel distance
+
+The response includes:
+
+- Best overall store
+- Cheapest store
+- Closest store
+- Full store comparison list
 
 ---
 
 ## Core Logic
 
-### 1) Profile → BMR → TDEE → Calorie Target
-- Computes **BMR** (Mifflin-St Jeor)
-- Applies **activityLevel** factor to estimate **TDEE**
-- Adjusts calories by **goal** (cut/bulk/maintain)
+### 1. Profile → Calories & Macros
 
-### 2) Calories → Macros + Food Group Needs
-- Converts calories → macro targets (protein/carbs/fats)
-- Adds food-group targets (veg/fruit servings, fiber grams) using simple heuristics suitable for hackathon demo
+Uses the Mifflin-St Jeor Equation to compute BMR.
 
-### 3) Ingredient → Food Groups → Gap Detection
-- Maps ingredients into food groups:
-    - PROTEIN, VEGGIES, FRUITS, FIBER, CARBS, FATS
-- Compares “what’s in the fridge” vs targets
-- Detects gaps like:
-    - LOW_PROTEIN, NO_VEGGIES, LOW_FIBER, etc.
+Steps:
+1. Calculate **BMR (Basal Metabolic Rate)**
+2. Multiply by activity factor → **TDEE**
+3. Adjust calories based on goal (lose weight / maintain / gain muscle)
 
-### 4) Gap → Category Recommendations → Items
-- Generates recommendations at the **category level** first (e.g., “Protein is low…”)
-- Then generates a **shopping list** with concrete items + reasons
-- Respects diet constraints (e.g., vegan/keto)
-
-### 5) Freshness Awareness (Optional but supported)
-- If purchaseDate + shelfLifeDays exist:
-    - EXPIRED ingredients are ignored for “available inventory”
-    - USE_SOON triggers “prioritize meals using them” messages
+Then converts calories into daily targets for:
+- Protein
+- Carbohydrates
+- Fats
 
 ---
 
-## Architecture (Microservice)
+### 2. Food Group Targets
 
-This engine is designed as a **separate service** from the computer vision backend.
-
-| Component | Responsibility |
-|----------|----------------|
-| Vision Backend (Python) | Detect ingredients from fridge photos + confidence scores |
-| **Nutrition Engine (this service)** | Targets, food groups, gaps, recommendations, shopping list |
-| Frontend | Upload image, confirm ingredients, display outputs |
+Adds daily targets for:
+- Vegetable servings
+- Fruit servings
+- Fiber grams
 
 ---
+
+### 3. Ingredient Analysis (Database-Driven)
+
+Every ingredient is matched against the Supabase `foods` table.
+
+Fields used:
+- protein_per_100g
+- carbs_per_100g
+- fats_per_100g
+- fiber_per_100g
+- calories_per_100g
+- food_group
+- diet_tags
+
+If an ingredient is not found in the database, the API returns a **400 BAD REQUEST** with:
+UNKNOWN_INGREDIENT
+
+---
+
+### 4. Gap Detection
+
+The system detects category-level nutrition gaps:
+
+- LOW_PROTEIN
+- NO_VEGGIES
+- NO_FRUITS
+- LOW_FIBER
+- LOW_HEALTHY_FATS
+- LOW_COMPLEX_CARBS
+
+---
+
+### 5. Shopping List Generation (Database-Backed)
+
+Shopping suggestions come directly from the foods database and are filtered by:
+
+- Food group needed
+- User diet type
+- Nutritional relevance
+
+---
+
+### 6. Store Recommendation Engine
+
+Store and pricing data are stored in **Supabase**.
+
+| Table | Purpose |
+|------|---------|
+| foods | Master nutrition database |
+| stores | Store locations with latitude/longitude |
+| store_prices | Food price per store |
+
+**Scoring formula:**
+``` 
+score = 0.5 × normalized_price + 0.5 × normalized_distance
+```
+
+Distance is retrieved using **Google Distance Matrix API**.  
+If the API fails, the system falls back to Haversine distance.
 
 ## API Endpoints
 
 ### Health Check
+```GET /api/nutrition/ping```
 
-```
-GET /api/nutrition/ping
-```
 
-### Main Nutrition Analysis
-```
-POST /api/nutrition/analyze
-```
+---
 
-### Sample Request
-
+### Nutrition Analysis
+```POST /api/nutrition/analyze```
+#### Sample Request
 ```json
 {
   "userProfile": {
-    "age": 20,
-    "weightKg": 60,
-    "heightCm": 165,
-    "gender": "female",
-    "healthGoal": "LOSE_WEIGHT",
-    "dietType": "BALANCED"
+    "age": 22,
+    "weightKg": 65,
+    "heightCm": 169,
+    "gender": "male",
+    "healthGoal": "GAIN_MUSCLE",
+    "dietType": "BALANCED",
+    "activityLevel": "MODERATE"
   },
   "ingredients": [
     { "name": "egg", "quantity": 2, "unit": "pieces", "confidenceScore": 0.92 }
@@ -111,48 +154,55 @@ POST /api/nutrition/analyze
 }
 ```
 
-### Sample Response
+### Store Recommendation
 
+```POST /api/stores/recommend```
+#### Sample Request
 ```json
 {
-  "nutritionTarget": {
-    "calories": 1555.4,
-    "protein": 72,
-    "carbs": 219.6,
-    "fats": 43.2
-  },
-  "recommendations": [
-    "You may need more protein — consider chicken breast, tofu, or Greek yogurt.",
-    "Add more low-calorie vegetables like broccoli or spinach."
-  ],
-  "shoppingList": [
-    {
-      "item": "Chicken breast",
-      "reason": "Low current protein intake"
-    }
+  "lat": 33.954764,
+  "lng": -83.375151,
+  "neededItems": [
+    "egg", "apple", "salmon", "avocado", "bread", "greek yogurt"
   ]
 }
 ```
 
----
+### Tech Stack
+* Java 21
 
-## Tech Stack
+* Spring Boot
 
-- Java 21
-- Spring Boot
-- RESTful API
-- Swagger / OpenAPI for documentation
+* Supabase (PostgreSQL + REST API)
 
----
+* Google Maps Distance Matrix API
 
-## How to Run
+* Swagger / OpenAPI
 
-```bash
+### How to Run
+```
 cd nutrition-engine
 mvn spring-boot:run
 ```
 
-Swagger UI:
-```
+### Swagger UI:
+```html
 http://localhost:8080/swagger-ui.html
+```
+
+### Required Environment Variables
+```
+supabase.url=YOUR_SUPABASE_URL
+supabase.serviceRoleKey=YOUR_SERVICE_ROLE_KEY
+supabase.foodTable=foods
+
+google.maps.apiKey=YOUR_GOOGLE_MAPS_API_KEY
+google.maps.mode=driving
+```
+
+### Demo Coordinates
+For realistic store distance results, use coordinates of **Miller Learning Center UGA**:
+```
+Latitude: 33.954764
+Longitude: -83.375151
 ```

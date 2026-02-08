@@ -80,3 +80,66 @@ The system is designed to support continuous refinement. Ingredient detection mo
 ## Disclaimer
 
 NutriSense provides general food and nutrition recommendations for informational purposes only. It is not intended to diagnose, treat, or replace professional medical or dietary advice.
+
+---
+
+## Purpose of the Project
+
+Help users make healthier, budget-aware decisions by:
+- Scanning fridge images to detect available ingredients
+- Personalizing nutrition targets from a simple user profile
+- Recommending missing items to balance macros/food groups
+- Suggesting practical recipes aligned to preferences
+- Ranking nearby stores by distance and total basket price
+
+---
+
+## Team Members
+- Hieu Cao — Backend + Database Admin
+- Minh Nguyen — Fullstack
+- Trung Nguyen — AI Engineer
+- Giang Nguyen — QA
+
+---
+
+## Tools Utilized
+
+- Backend: **FastAPI**, **Uvicorn**, **Pydantic**, **httpx**, **Pillow**
+- Data/Auth: **Supabase** (auth, storage, tables)
+- AI: **Google Gemini** (`google-generativeai`, migrating to `google.genai`)
+- Maps: **Google Distance Matrix API** (distance by mode; Haversine fallback)
+- Frontend: **HTML/CSS (Inter font)**, **Vanilla JS**
+- Java Service (optional): **Spring Boot 3**, **Springdoc OpenAPI**, **Maven**, **Eclipse Temurin 21**
+
+---
+
+## Challenges and How We Overcame Them
+
+- Gemini API quota (429) caused recipe endpoint failures
+	- Added a deterministic fallback so `/recipes/recommend` always returns JSON
+	- Hardened JSON parsing for fenced ````json` blocks
+
+- Missing Google Maps API key led to distance failures
+	- Logged key presence; fell back to Haversine distance when the API is unavailable
+	- Documented `.env` setup for `GOOGLE_MAPS_API_KEY` and `GOOGLE_MAPS_MODE`
+
+- Import error in backend due to missing walking helpers
+	- Restored `estimate_walking_steps()` and `estimate_walking_calories()` in `store_logic.py`
+
+- UX duplication for distance/steps
+	- Simplified frontend card to show a single distance value and removed redundant trip display
+
+---
+
+## Credits (Frameworks, APIs, Libraries)
+
+- **FastAPI** (MIT) — Web framework for Python APIs
+- **Uvicorn** (BSD) — ASGI server
+- **Pydantic** (MIT) — Data validation
+- **httpx** (BSD) — HTTP client
+- **Pillow** (HPND) — Image processing
+- **Supabase** — Auth, storage, and Postgres backend-as-a-service
+- **Google Gemini API** — Image/recipe generation (deprecated `google-generativeai`; migrating to `google.genai`)
+- **Google Distance Matrix API** — Driving/walking distance estimates
+- **Spring Boot 3 / Springdoc OpenAPI** — Java service framework and OpenAPI docs
+

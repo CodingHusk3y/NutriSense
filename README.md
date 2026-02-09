@@ -94,14 +94,6 @@ Help users make healthier, budget-aware decisions by:
 
 ---
 
-## Team Members
-- Hieu Cao — Backend + Database Admin
-- Minh Nguyen — Fullstack
-- Trung Nguyen — AI Engineer
-- Giang Nguyen — QA
-
----
-
 ## Tools Utilized
 
 - Backend: **FastAPI**, **Uvicorn**, **Pydantic**, **httpx**, **Pillow**

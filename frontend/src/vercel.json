@@ -4,5 +4,6 @@
   ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "https://nutrisense-hu2j.onrender.com" }
+      ,{ "source": "/favicon.ico", "destination": "/favicon.svg" }
   ]
 }

@@ -3,7 +3,7 @@
     { "source": "/", "destination": "/auth.html" }
   ],
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "https://nutrisense-hu2j.onrender.com" }
+    { "source": "/api/(.*)", "destination": "https://nutrisense-hu2j.onrender.com/$1" }
       ,{ "source": "/favicon.ico", "destination": "/favicon.svg" }
   ]
 }

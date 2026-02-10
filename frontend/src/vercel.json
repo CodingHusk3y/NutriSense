@@ -1,4 +1,7 @@
 {
+  "redirects": [
+    { "source": "/", "destination": "/auth.html" }
+  ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "https://nutrisense-hu2j.onrender.com" }
   ]

@@ -9,6 +9,22 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="icon" href="favicon.svg" type="image/svg+xml" sizes="any">
+    <!-- Auth gate: redirect to login ASAP if no Supabase session -->
+    <script type="module">
+        import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+        import { SUPABASE_URL, SUPABASE_ANON_KEY, BACKEND_URL } from './config.js';
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            window.location.href = 'auth.html';
+        } else {
+            window.supabaseClient = supabase;
+            window.BACKEND_URL = BACKEND_URL;
+        }
+    </script>
+    <noscript>
+        <meta http-equiv="refresh" content="0;url=auth.html">
+    </noscript>
 </head>
 <body>
     <!-- Header -->
@@ -321,20 +337,6 @@
         </div>
     </div>
 
-    <!-- Auth gate: redirect to login if no Supabase session -->
-    <script type="module">
-        import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-        import { SUPABASE_URL, SUPABASE_ANON_KEY, BACKEND_URL } from './config.js';
-        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-            window.location.href = 'auth.html';
-        } else {
-            // Expose client for other scripts if needed
-            window.supabaseClient = supabase;
-            window.BACKEND_URL = BACKEND_URL;
-        }
-    </script>
     <script src="script.js"></script>
 </body>
 </html>

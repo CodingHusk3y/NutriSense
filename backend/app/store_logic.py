@@ -6,6 +6,7 @@ from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
 from .config import get_supabase_client
 print(f"DEBUG: API Key length is {len(os.getenv('GOOGLE_MAPS_API_KEY', ''))}")
+_printed_maps_key_warning = False
 
 # --- Configuration ---
 # GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY", "")
@@ -44,8 +45,11 @@ async def get_google_distance_km(from_lat: float, from_lng: float, to_lat: float
 
     # 2. Debug Print: Check if key exists (Safe print, doesn't reveal full key)
     # This will print EVERY time the function runs
+    global _printed_maps_key_warning
     if not api_key:
-        print("❌ ERROR: Google Maps API Key is MISSING or EMPTY.")
+        if not _printed_maps_key_warning:
+            print("❌ ERROR: Google Maps API Key is MISSING or EMPTY.")
+            _printed_maps_key_warning = True
         return -1.0
     
     # print(f"DEBUG: Using Key: {api_key[:4]}...******") # Uncomment if you want to verify the key loaded

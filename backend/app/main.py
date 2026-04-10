@@ -1,20 +1,34 @@
 import json
 import io
 import requests
+import time
+import re
+import logging
+from collections import deque
 from typing import Optional, Dict, Any, List
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Header
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from PIL import Image
 import google.generativeai as genai
 from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 # Import shared config
 from .config import (
     get_supabase_client, 
     get_bearer_token, 
-    FRIDGE_BUCKET
+    FRIDGE_BUCKET,
+    ALLOWED_ORIGINS,
+    ALLOWED_HOSTS,
+    ENABLE_HTTPS_REDIRECT,
+    MONITOR_READ_KEY,
 )
 
 # Import routers and logic
@@ -42,25 +56,125 @@ class WalkLog(BaseModel):
 
 # --- App Setup ---
 app = FastAPI(title="NutriSense Backend", version="0.1.0")
+logger = logging.getLogger("nutrisense.security")
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+REQUEST_COUNT = Counter(
+    "nutrisense_http_requests_total",
+    "Total number of HTTP requests",
+    ["method", "path", "status"],
+)
+REQUEST_LATENCY = Histogram(
+    "nutrisense_http_request_duration_seconds",
+    "HTTP request duration in seconds",
+    ["path"],
+)
+SUSPICIOUS_REQUESTS = Counter(
+    "nutrisense_suspicious_requests_total",
+    "Number of requests flagged as suspicious",
+    ["reason"],
+)
+SECURITY_ALERTS = deque(maxlen=200)
+
+SUSPICIOUS_PATTERNS = {
+    "sql_injection": re.compile(r"(\bunion\b.+\bselect\b|\bor\b\s+1=1|--|;\s*drop\s+table)", re.IGNORECASE),
+    "xss_attempt": re.compile(r"(<script|onerror\s*=|javascript:|<img\s+src)", re.IGNORECASE),
+}
+
+
+def _extract_request_snippet(request: Request) -> str:
+    return f"{request.url.path}?{request.url.query}"[:300]
+
+
+def _detect_suspicious_reason(request: Request) -> Optional[str]:
+    haystack = " ".join(
+        [
+            request.url.path,
+            request.url.query,
+            request.headers.get("user-agent", ""),
+            request.headers.get("referer", ""),
+        ]
+    )
+    for reason, pattern in SUSPICIOUS_PATTERNS.items():
+        if pattern.search(haystack):
+            return reason
+    return None
+
+
+@app.middleware("http")
+async def secure_and_instrument(request: Request, call_next):
+    start = time.perf_counter()
+    reason = _detect_suspicious_reason(request)
+    if reason:
+        client_ip = request.client.host if request.client else "unknown"
+        snippet = _extract_request_snippet(request)
+        logger.warning("Suspicious request: ip=%s reason=%s target=%s", client_ip, reason, snippet)
+        SUSPICIOUS_REQUESTS.labels(reason=reason).inc()
+        SECURITY_ALERTS.append({"ip": client_ip, "reason": reason, "target": snippet, "ts": time.time()})
+
+    response = await call_next(request)
+
+    elapsed = time.perf_counter() - start
+    path = request.url.path
+    REQUEST_COUNT.labels(method=request.method, path=path, status=str(response.status_code)).inc()
+    REQUEST_LATENCY.labels(path=path).observe(elapsed)
+
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "img-src 'self' data: https:; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' data: https://fonts.gstatic.com; "
+        "script-src 'self' https://esm.sh https://cdn.jsdelivr.net https://www.googletagmanager.com; "
+        "connect-src 'self' https://*.supabase.co https://nutrisense-hu2j.onrender.com https://www.google-analytics.com; "
+        "frame-ancestors 'none';"
+    )
+    return response
 
 # Register the new recipe endpoints
 app.include_router(recipes_router)
 
+if ENABLE_HTTPS_REDIRECT:
+    app.add_middleware(HTTPSRedirectMiddleware)
+
+if ALLOWED_HOSTS:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"]
 )
 
 @app.get("/health")
-def health() -> Dict[str, str]:
+@limiter.limit("60/minute")
+def health(request: Request) -> Dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/metrics")
+def metrics() -> PlainTextResponse:
+    return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+@app.get("/security/log-alerts")
+def get_security_alerts(monitor_key: Optional[str] = Header(default=None, alias="X-Monitor-Key")):
+    if not MONITOR_READ_KEY or monitor_key != MONITOR_READ_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return {"alerts": list(SECURITY_ALERTS)}
 
 # --- Fridge Scan ---
 @app.post("/fridge/scan")
-def scan_fridge(file: UploadFile = File(...), Authorization: Optional[str] = Header(default=None)):
+@limiter.limit("10/minute")
+def scan_fridge(request: Request, file: UploadFile = File(...), Authorization: Optional[str] = Header(default=None)):
     supabase = get_supabase_client()
     if supabase is None:
         raise HTTPException(status_code=500, detail="Supabase not configured")
@@ -120,7 +234,8 @@ def scan_fridge(file: UploadFile = File(...), Authorization: Optional[str] = Hea
 
 # --- Profile Endpoints ---
 @app.get("/profile")
-def get_profile(Authorization: Optional[str] = Header(default=None)):
+@limiter.limit("30/minute")
+def get_profile(request: Request, Authorization: Optional[str] = Header(default=None)):
     supabase = get_supabase_client()
     if supabase is None:
         raise HTTPException(status_code=500, detail="Supabase not configured")
@@ -142,7 +257,8 @@ def get_profile(Authorization: Optional[str] = Header(default=None)):
         raise HTTPException(status_code=500, detail=f"Profile fetch failed: {e}")
 
 @app.put("/profile")
-def upsert_profile(payload: Dict[str, Any], Authorization: Optional[str] = Header(default=None)):
+@limiter.limit("12/minute")
+def upsert_profile(request: Request, payload: Dict[str, Any], Authorization: Optional[str] = Header(default=None)):
     supabase = get_supabase_client()
     if supabase is None:
         raise HTTPException(status_code=500, detail="Supabase not configured")
@@ -174,7 +290,8 @@ def upsert_profile(payload: Dict[str, Any], Authorization: Optional[str] = Heade
 
 # --- Nutrition Analysis (Python Native) ---
 @app.post("/nutrition/analyze-fridge")
-def analyze_fridge_nutrition(payload: AnalysisRequest, Authorization: Optional[str] = Header(default=None)):
+@limiter.limit("20/minute")
+def analyze_fridge_nutrition(request: Request, payload: AnalysisRequest, Authorization: Optional[str] = Header(default=None)):
     """
     1. Calculates User Targets
     2. Detects Nutritional Gaps based on Fridge
@@ -224,7 +341,8 @@ def analyze_fridge_nutrition(payload: AnalysisRequest, Authorization: Optional[s
     }
 
 @app.post("/stores/recommend")
-async def get_store_recommendations(payload: StoreRequest):
+@limiter.limit("30/minute")
+async def get_store_recommendations(request: Request, payload: StoreRequest):
     """
     Returns top 3 stores based on price and distance for the given list.
     """
@@ -232,7 +350,8 @@ async def get_store_recommendations(payload: StoreRequest):
 
 # --- Activity: Walking Calories Logging ---
 @app.post("/activity/walk")
-def log_walking_session(payload: WalkLog, Authorization: Optional[str] = Header(default=None)):
+@limiter.limit("20/minute")
+def log_walking_session(request: Request, payload: WalkLog, Authorization: Optional[str] = Header(default=None)):
     supabase = get_supabase_client()
     if supabase is None:
         raise HTTPException(status_code=500, detail="Supabase not configured")
@@ -258,7 +377,8 @@ def log_walking_session(payload: WalkLog, Authorization: Optional[str] = Header(
         raise HTTPException(status_code=500, detail=f"Walking log failed: {e}")
 
 @app.get("/activity/walk/trend")
-def get_walking_trend(days: int = 14, Authorization: Optional[str] = Header(default=None)):
+@limiter.limit("30/minute")
+def get_walking_trend(request: Request, days: int = 14, Authorization: Optional[str] = Header(default=None)):
     supabase = get_supabase_client()
     if supabase is None:
         raise HTTPException(status_code=500, detail="Supabase not configured")

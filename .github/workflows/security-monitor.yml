@@ -1,0 +1,44 @@
+name: Security Monitoring
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'
+
+jobs:
+  detect_intrusions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Run AI-based alert analysis
+        env:
+          SECURITY_ALERTS_URL: ${{ secrets.SECURITY_ALERTS_URL }}
+          MONITOR_READ_KEY: ${{ secrets.MONITOR_READ_KEY }}
+        run: |
+          if [ -z "$SECURITY_ALERTS_URL" ] || [ -z "$MONITOR_READ_KEY" ]; then
+            echo "Monitoring secrets are not configured. Skipping."
+            exit 0
+          fi
+          python scripts/security_log_monitor.py \
+            --alerts-url "$SECURITY_ALERTS_URL" \
+            --monitor-key "$MONITOR_READ_KEY" \
+            --output security-monitoring-report.md
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-monitoring-report
+          path: security-monitoring-report.md

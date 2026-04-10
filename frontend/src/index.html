@@ -13,7 +13,7 @@
     <!-- Auth gate: redirect to login ASAP if no Supabase session -->
     <script type="module">
         import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-        import { SUPABASE_URL, SUPABASE_ANON_KEY, BACKEND_URL } from './config.js';
+        import { SUPABASE_URL, SUPABASE_ANON_KEY, BACKEND_URL, GA_MEASUREMENT_ID } from './config.js';
         const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
@@ -21,6 +21,7 @@
         } else {
             window.supabaseClient = supabase;
             window.BACKEND_URL = BACKEND_URL;
+            window.GA_MEASUREMENT_ID = GA_MEASUREMENT_ID;
         }
     </script>
     <noscript>
@@ -338,6 +339,7 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.7/dist/purify.min.js" crossorigin="anonymous"></script>
     <script src="script.js"></script>
 </body>
 </html>

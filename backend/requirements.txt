@@ -6,3 +6,5 @@ requests==2.32.3
 google-generativeai
 pillow
 python-multipart
+slowapi==0.1.9
+prometheus-client==0.20.0

@@ -15,6 +15,57 @@ const toggleText = document.getElementById('toggleText');
 const toast = document.getElementById('toast');
 const toastMessage = document.getElementById('toastMessage');
 
+const AUTH_GUARD_KEY = 'nutri_auth_guard';
+const MAX_ATTEMPTS = 5;
+const ATTEMPT_WINDOW_MS = 10 * 60 * 1000;
+const LOCKOUT_MS = 15 * 60 * 1000;
+
+function getAuthGuard() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(AUTH_GUARD_KEY) || '{}');
+    return {
+      attempts: Array.isArray(parsed.attempts) ? parsed.attempts : [],
+      lockedUntil: Number(parsed.lockedUntil || 0)
+    };
+  } catch {
+    return { attempts: [], lockedUntil: 0 };
+  }
+}
+
+function saveAuthGuard(guard) {
+  localStorage.setItem(AUTH_GUARD_KEY, JSON.stringify(guard));
+}
+
+function isAuthLocked() {
+  const guard = getAuthGuard();
+  const now = Date.now();
+  if (guard.lockedUntil > now) {
+    return guard.lockedUntil - now;
+  }
+  if (guard.lockedUntil) {
+    saveAuthGuard({ attempts: guard.attempts, lockedUntil: 0 });
+  }
+  return 0;
+}
+
+function recordAuthFailure() {
+  const now = Date.now();
+  const guard = getAuthGuard();
+  const recentAttempts = guard.attempts.filter((ts) => now - ts <= ATTEMPT_WINDOW_MS);
+  recentAttempts.push(now);
+  const lockedUntil = recentAttempts.length >= MAX_ATTEMPTS ? now + LOCKOUT_MS : 0;
+  saveAuthGuard({ attempts: recentAttempts, lockedUntil });
+}
+
+function clearAuthFailures() {
+  saveAuthGuard({ attempts: [], lockedUntil: 0 });
+}
+
+function humanizeMs(ms) {
+  const totalMinutes = Math.ceil(ms / 60000);
+  return `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'}`;
+}
+
 function showToast(message) {
   if (!toast || !toastMessage) return;
   toastMessage.textContent = message;
@@ -48,6 +99,12 @@ toggleBtn.addEventListener('click', (e) => {
 
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+  const lockMs = isAuthLocked();
+  if (lockMs > 0) {
+    showToast(`Too many failed attempts. Try again in ${humanizeMs(lockMs)}.`);
+    return;
+  }
+
   const email = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
   if (!email || !password) {
@@ -60,10 +117,14 @@ loginForm.addEventListener('submit', async (e) => {
       console.error('Sign in error:', error);
       throw error;
     }
+    clearAuthFailures();
     showToast('Signed in successfully');
     // Redirect to app
     window.location.href = 'index.html';
   } catch (err) {
+    if (!String(err?.message || '').toLowerCase().includes('too many failed attempts')) {
+      recordAuthFailure();
+    }
     const msg = err?.message || 'Sign in failed';
     showToast(msg);
   }
@@ -71,6 +132,12 @@ loginForm.addEventListener('submit', async (e) => {
 
 registerForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+  const lockMs = isAuthLocked();
+  if (lockMs > 0) {
+    showToast(`Too many failed attempts. Try again in ${humanizeMs(lockMs)}.`);
+    return;
+  }
+
   const email = document.getElementById('rEmail').value.trim();
   const password = passwordInput.value;
   const confirmPassword = confirmInput.value;
@@ -101,9 +168,13 @@ registerForm.addEventListener('submit', async (e) => {
         : rawMsg || 'Sign up failed';
       throw new Error(friendly);
     }
+    clearAuthFailures();
     showToast('Account created successfully.');
     toggleForms();
   } catch (err) {
+    if (!String(err?.message || '').toLowerCase().includes('too many failed attempts')) {
+      recordAuthFailure();
+    }
     const msg = err?.message || 'Sign up failed';
     showToast(msg);
   }

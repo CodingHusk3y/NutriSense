@@ -4,6 +4,13 @@ A modern web application that uses AI to detect ingredients from fridge photos, 
 
 ## Features
 
+### Security, Performance, Monitoring (Project 2)
+- Dynamic UI rendering sanitized with DOMPurify to reduce XSS risk.
+- Client-side auth attempt lockout after repeated failed attempts.
+- Service worker cache for faster repeat loads.
+- Google Analytics integration hook (set `GA_MEASUREMENT_ID` in `src/config.js`).
+- Vercel edge headers and cache-control in `src/vercel.json`.
+
 ### Intelligent Ingredient Detection
 - Upload or drag-and-drop fridge photos
 - AI-powered ingredient recognition with confidence scores
@@ -35,6 +42,8 @@ A modern web application that uses AI to detect ingredients from fridge photos, 
 - **CSS3** - Modern styling with gradients, animations, and responsive design
 - **Vanilla JavaScript** - No framework dependencies for optimal performance
 - **LocalStorage API** - Client-side data persistence
+- **DOMPurify** - Runtime input/output sanitization
+- **Service Worker API** - Static caching for performance
 
 ## Project Structure
 
@@ -174,3 +183,5 @@ uvicorn app.main:app --reload
 - Store locations and prices are mock data (requires maps/pricing APIs)
 - Recipe database is limited (requires recipe API integration)
 - No user authentication (single-user application)
+
+Note: authentication is now implemented through Supabase in `auth.html` and `auth.js`.

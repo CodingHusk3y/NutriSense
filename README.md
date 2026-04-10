@@ -135,3 +135,70 @@ Help users make healthier, budget-aware decisions by:
 - **Google Distance Matrix API** — Driving/walking distance estimates
 - **Spring Boot 3 / Springdoc OpenAPI** — Java service framework and OpenAPI docs
 
+---
+
+## Security, Performance, and Monitoring Enhancements
+
+This project now includes the required networking-focused hardening and observability features:
+
+### 1) Security Enhancements (Mandatory)
+
+- HTTPS enabled by deployment platforms:
+	- Frontend on Vercel (TLS enabled by default)
+	- Backend on Render (TLS enabled by default)
+
+- XSS and injection protection:
+	- Frontend dynamic content is sanitized with DOMPurify before rendering.
+	- Backend suspicious-request detector flags common SQLi/XSS patterns in path/query/user-agent and records alerts.
+
+- Brute-force and abuse protection:
+	- Backend API rate limiting with SlowAPI per endpoint.
+	- Auth page adds client-side lockout after repeated failed attempts.
+
+- Secure transport and browser hardening:
+	- Security headers on backend and frontend edge config:
+		- X-Content-Type-Options
+		- X-Frame-Options
+		- Referrer-Policy
+		- Permissions-Policy
+		- Content-Security-Policy (backend API responses)
+
+### 2) Additional Enhancements
+
+- Database integration (already present):
+	- Supabase (auth + profile + storage + walking session tables)
+
+- Performance optimization:
+	- Service worker static caching for app shell assets.
+	- Static asset cache headers on Vercel.
+	- Lazy/async image decoding for fridge preview.
+
+- Monitoring and security analysis:
+	- Prometheus metrics endpoint at `/metrics`.
+	- Security alert endpoint at `/security/log-alerts` (protected with `X-Monitor-Key`).
+	- Log anomaly analyzer script: `scripts/security_log_monitor.py`.
+
+- Automated deployment:
+	- GitHub Actions CI/CD workflow for verification + deploy hook triggers for Vercel and Render.
+
+## GitHub Actions Setup
+
+Configure these repository secrets:
+
+- `VERCEL_DEPLOY_HOOK_URL`
+- `RENDER_DEPLOY_HOOK_URL`
+- `SECURITY_ALERTS_URL` (example: `https://your-render-service.onrender.com/security/log-alerts`)
+- `MONITOR_READ_KEY`
+
+Workflows:
+
+- `.github/workflows/ci-cd.yml`
+- `.github/workflows/security-monitor.yml`
+
+## Submission Checklist
+
+- Live website URL (Vercel frontend URL)
+- GitHub repository URL
+- 3-5 page report PDF generated from `docs/TECHNICAL_REPORT_TEMPLATE.md`
+
+

@@ -50,9 +50,43 @@ const elements = {
     editFreshness: document.getElementById('editFreshness')
 };
 
+const sanitizer = window.DOMPurify || {
+    sanitize: (value) => String(value ?? '')
+};
+
+function sanitizeText(value) {
+    return sanitizer.sanitize(String(value ?? ''), { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
+}
+
+function initializeAnalytics() {
+    const measurementId = window.GA_MEASUREMENT_ID;
+    if (!measurementId || measurementId === 'G-XXXXXXXXXX') return;
+
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;
+    document.head.appendChild(script);
+
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function gtag() { window.dataLayer.push(arguments); };
+    window.gtag('js', new Date());
+    window.gtag('config', measurementId, { anonymize_ip: true });
+}
+
+function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch((err) => {
+            console.warn('Service worker registration failed', err);
+        });
+    });
+}
+
 // --- Initialization ---
 
 function init() {
+    initializeAnalytics();
+    registerServiceWorker();
     loadFromStorage();
     setupEventListeners();
     renderPreferences();
@@ -198,7 +232,12 @@ function processImage(file) {
 
     const reader = new FileReader();
     reader.onload = (e) => {
-        elements.previewImage.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+        const img = document.createElement('img');
+        img.src = e.target.result;
+        img.alt = 'Preview';
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        elements.previewImage.replaceChildren(img);
         elements.previewImage.classList.remove('hidden');
     };
     reader.readAsDataURL(file);
@@ -344,9 +383,9 @@ function renderIngredients() {
         <div class="ingredient-item ${item.confirmed ? 'confirmed' : 'unconfirmed'}">
             <div class="ingredient-header">
                 <div class="ingredient-info">
-                    <h4>${item.name}</h4>
-                    <p>${item.quantity} ${item.unit}</p>
-                    <span class="freshness-badge freshness-${item.freshness}">${item.freshness}</span>
+                    <h4>${sanitizeText(item.name)}</h4>
+                    <p>${sanitizeText(item.quantity)} ${sanitizeText(item.unit)}</p>
+                    <span class="freshness-badge freshness-${sanitizeText(item.freshness)}">${sanitizeText(item.freshness)}</span>
                 </div>
             </div>
             <div class="ingredient-actions">
@@ -367,9 +406,9 @@ function renderRecommendations(suggestions) {
     elements.recommendationsList.innerHTML = suggestions.map(s => `
         <div class="recommendation-item">
             <div class="recommendation-info">
-                <h4>${s.suggestion}</h4>
-                <p class="recommendation-reason">${s.reason}</p>
-                <span class="badge" style="background:#fee2e2; color:#991b1b; font-size: 0.75rem;">${s.gap.replace('_', ' ')}</span>
+                <h4>${sanitizeText(s.suggestion)}</h4>
+                <p class="recommendation-reason">${sanitizeText(s.reason)}</p>
+                <span class="badge" style="background:#fee2e2; color:#991b1b; font-size: 0.75rem;">${sanitizeText((s.gap || '').replace('_', ' '))}</span>
             </div>
         </div>
     `).join('');
@@ -384,7 +423,7 @@ function renderStores(stores) {
     elements.storesList.innerHTML = stores.map((store, idx) => `
         <div class="store-item">
             <div class="store-header">
-                <h4 class="store-name">${store.name}</h4>
+                <h4 class="store-name">${sanitizeText(store.name)}</h4>
                 <span class="store-distance">${(Number(store.distance_km || 0) / 1000).toFixed(2)} km</span>
             </div>
             <p style="font-size: 0.9rem;">Est. Price: <strong style="color:var(--primary-color)">$${store.total_price}</strong></p>
@@ -414,14 +453,14 @@ function renderRecipes(recipes) {
     elements.recipesList.innerHTML = recipes.map(r => `
         <div class="recipe-card">
             <div class="recipe-content">
-                <h3 class="recipe-title">${r.title}</h3>
+                <h3 class="recipe-title">${sanitizeText(r.title)}</h3>
                 <div class="recipe-meta">
                     <span class="recipe-meta-item">Match: ${r.match_score}%</span>
                     <span class="recipe-meta-item">${r.macros.calories} cal</span>
                     <span class="recipe-meta-item">${r.macros.protein} protein</span>
                 </div>
-                <p class="recipe-ingredients"><strong>Missing:</strong> ${r.missing_ingredients.length ? r.missing_ingredients.join(', ') : 'None'}</p>
-                <p style="font-size:0.85rem; color:#666; margin-top:8px; line-height: 1.4;">${r.reasoning}</p>
+                <p class="recipe-ingredients"><strong>Missing:</strong> ${r.missing_ingredients.length ? sanitizeText(r.missing_ingredients.join(', ')) : 'None'}</p>
+                <p style="font-size:0.85rem; color:#666; margin-top:8px; line-height: 1.4;">${sanitizeText(r.reasoning)}</p>
             </div>
         </div>
     `).join('');
@@ -578,8 +617,8 @@ function renderPreferences() {
     elements.preferencesTags.innerHTML = state.preferences
         .map((p, index) => `
         <span class="preference-tag">
-            <span class="tag-text">${p}</span>
-            <button class="tag-remove" aria-label="Remove ${p}" onclick="removePreference(${index})">&times;</button>
+            <span class="tag-text">${sanitizeText(p)}</span>
+            <button class="tag-remove" aria-label="Remove ${sanitizeText(p)}" onclick="removePreference(${index})">&times;</button>
         </span>
     `)
         .join('');

@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import Optional, List, Any
 from dotenv import load_dotenv
 import google.generativeai as genai
 
@@ -22,6 +22,20 @@ NUTRITION_ENGINE_URL = os.getenv("NUTRITION_ENGINE_URL", "http://127.0.0.1:8000"
 PRESAGE_API_KEY = os.getenv("PRESAGE_API_KEY")
 PRESAGE_API_URL = os.getenv("PRESAGE_API_URL", "https://api.physiology.presagetech.com")
 
+
+def _csv_env(name: str, default: str) -> List[str]:
+    raw = os.getenv(name, default)
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+ALLOWED_ORIGINS = _csv_env(
+    "ALLOWED_ORIGINS",
+    "https://nutrisense.vercel.app,http://localhost:3000,http://127.0.0.1:5500,http://localhost:5500"
+)
+ALLOWED_HOSTS = _csv_env("ALLOWED_HOSTS", "*")
+ENABLE_HTTPS_REDIRECT = os.getenv("ENABLE_HTTPS_REDIRECT", "false").lower() == "true"
+MONITOR_READ_KEY = os.getenv("MONITOR_READ_KEY", "")
+
 # Configure Gemini globally
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
@@ -29,7 +43,7 @@ else:
     print("WARNING: GEMINI_API_KEY not found in .env")
 
 # Shared Helper Functions
-def get_supabase_client() -> Optional[Client]:
+def get_supabase_client() -> Optional[Any]:
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY or create_client is None:
         return None
     return create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)

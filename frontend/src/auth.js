@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, GA_MEASUREMENT_ID } from './config.js';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const EMAIL_REDIRECT_TO = `${window.location.origin}/auth.html`;
@@ -14,6 +14,22 @@ const toggleBtn = document.getElementById('toggleBtn');
 const toggleText = document.getElementById('toggleText');
 const toast = document.getElementById('toast');
 const toastMessage = document.getElementById('toastMessage');
+
+function initializeAnalytics() {
+  if (!GA_MEASUREMENT_ID || GA_MEASUREMENT_ID === 'G-XXXXXXXXXX') return;
+
+  const script = document.createElement('script');
+  script.async = true;
+  script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(GA_MEASUREMENT_ID)}`;
+  document.head.appendChild(script);
+
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = function gtag() { window.dataLayer.push(arguments); };
+  window.gtag('js', new Date());
+  window.gtag('config', GA_MEASUREMENT_ID, { anonymize_ip: true });
+}
+
+initializeAnalytics();
 
 const AUTH_GUARD_KEY = 'nutri_auth_guard';
 const MAX_ATTEMPTS = 5;

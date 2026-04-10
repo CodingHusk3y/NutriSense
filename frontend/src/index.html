@@ -14,6 +14,7 @@
     <script type="module">
         import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         import { SUPABASE_URL, SUPABASE_ANON_KEY, BACKEND_URL, GA_MEASUREMENT_ID } from './config.js';
+        window.GA_MEASUREMENT_ID = GA_MEASUREMENT_ID;
         const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
@@ -21,7 +22,6 @@
         } else {
             window.supabaseClient = supabase;
             window.BACKEND_URL = BACKEND_URL;
-            window.GA_MEASUREMENT_ID = GA_MEASUREMENT_ID;
         }
     </script>
     <noscript>

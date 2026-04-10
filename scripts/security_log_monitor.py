@@ -15,11 +15,28 @@ import sys
 from typing import Dict, List
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 def fetch_alerts(alerts_url: str, monitor_key: str) -> List[Dict]:
     headers = {"X-Monitor-Key": monitor_key}
-    response = requests.get(alerts_url, headers=headers, timeout=20)
+    retry = Retry(
+        total=3,
+        connect=3,
+        read=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+        raise_on_status=False,
+    )
+
+    session = requests.Session()
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+
+    response = session.get(alerts_url, headers=headers, timeout=(10, 30))
     response.raise_for_status()
     data = response.json()
     return data.get("alerts", [])
@@ -53,6 +70,7 @@ def detect_anomalies(alerts: List[Dict]) -> Dict:
         "risk_level": risk_level,
         "flagged_ips": flagged_ips,
         "reason_counts": dict(reason_counts),
+        "fetch_error": None,
     }
 
 
@@ -67,6 +85,10 @@ def generate_markdown(report: Dict) -> str:
         "",
         "## Alert Types",
     ]
+
+    if report.get("fetch_error"):
+        lines.insert(7, f"- Data fetch status: degraded ({report['fetch_error']})")
+        lines.insert(8, "")
 
     if not report["reason_counts"]:
         lines.append("- No alerts detected")
@@ -92,8 +114,23 @@ def main() -> int:
     parser.add_argument("--output", default="security-monitoring-report.md", help="Output markdown path")
     args = parser.parse_args()
 
-    alerts = fetch_alerts(args.alerts_url, args.monitor_key)
-    report = detect_anomalies(alerts)
+    try:
+        alerts = fetch_alerts(args.alerts_url, args.monitor_key)
+        report = detect_anomalies(alerts)
+    except requests.RequestException as exc:
+        report = {
+            "total_alerts": 0,
+            "risk_score": 0,
+            "risk_level": "low",
+            "flagged_ips": [],
+            "reason_counts": {},
+            "fetch_error": f"{type(exc).__name__}: {exc}",
+        }
+        print(
+            "Warning: could not fetch security alerts after retries; "
+            "publishing degraded report without failing CI.",
+            file=sys.stderr,
+        )
 
     markdown = generate_markdown(report)
     with open(args.output, "w", encoding="utf-8") as fp:
